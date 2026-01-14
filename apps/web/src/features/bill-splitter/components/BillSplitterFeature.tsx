@@ -5,7 +5,7 @@ import { Item, Person } from '../types';
 import { analyzeReceiptAction } from '../actions/analyze-receipt';
 import ItemAssignmentModal from './ItemAssignmentModal';
 
-// --- Iconos SVG Simples ---
+// --- Iconos SVG con tamaños fijos ---
 const Icons = {
     Scan: () => (
         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -13,14 +13,19 @@ const Icons = {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
     ),
-    User: () => (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+    History: () => (
+        <svg className="w-5 h-5 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
     ),
     Check: () => (
-        <svg className="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+    ),
+    Close: () => (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
     )
 };
@@ -30,10 +35,13 @@ export default function BillSplitterFeature() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [items, setItems] = useState<Item[]>([]);
-    const [people, setPeople] = useState<Person[]>([{ id: 1, name: 'Yo' }, { id: 2, name: 'Amigo' }]);
+    const [people] = useState<Person[]>([
+        { id: 1, name: 'Yo' },
+        { id: 2, name: 'Amigo' }
+    ]);
     const [modalItem, setModalItem] = useState<Item | null>(null);
 
-    // Evitar error de hidratación (SSR)
+    // SSR Guard
     useEffect(() => { setIsMounted(true); }, []);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,7 +54,7 @@ export default function BillSplitterFeature() {
         try {
             const formData = new FormData();
             formData.append('file', file);
-            const rawItems = await analyzeReceiptAction(formData); // Server Action
+            const rawItems = await analyzeReceiptAction(formData);
 
             setItems(rawItems.map((item, idx) => ({
                 id: idx,
@@ -56,56 +64,63 @@ export default function BillSplitterFeature() {
             })));
         } catch (err: any) {
             console.error(err);
-            setError("No pudimos leer el recibo. Intenta de nuevo.");
+            setError("No pudimos procesar la imagen. Prueba con otra más clara.");
         } finally {
             setIsLoading(false);
         }
     };
 
-    const totals = useMemo(() => {
+    const totalBill = useMemo(() => {
         return items.reduce((acc, item) => acc + item.price, 0);
     }, [items]);
 
-    if (!isMounted) return <div className="min-h-screen bg-black" />;
+    if (!isMounted) return <div className="min-h-screen bg-[#0a0a0a]" />;
 
     return (
-        <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500 selection:text-white">
+        <div className="min-h-screen bg-[#0a0a0a] text-white font-sans selection:bg-purple-900 selection:text-white">
 
-            {/* Navbar Simple */}
-            <header className="p-6 flex justify-between items-center max-w-5xl mx-auto">
-                <h1 className="text-xl font-bold tracking-tight">Pago Compartido</h1>
-                <div className="text-xs text-gray-400 opacity-50">Hoy, 14:30</div>
+            {/* Navbar Refinada */}
+            <header className="p-6 flex justify-between items-center max-w-5xl mx-auto border-b border-white/5 bg-[#0a0a0a]/80 backdrop-blur-xl sticky top-0 z-50">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-gradient-to-tr from-purple-600 to-blue-500 rounded-lg flex items-center justify-center font-bold text-sm">P</div>
+                    <h1 className="text-lg font-semibold tracking-tight">Pago Compartido</h1>
+                </div>
+                <Icons.History />
             </header>
 
             {/* Main Content */}
-            <main className="max-w-4xl mx-auto px-4 py-8 flex flex-col items-center justify-center min-h-[60vh]">
+            <main className="max-w-4xl mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-[70vh]">
 
-                {/* Pantalla Inicial (Upload) */}
+                {/* Vista Inicial o Error */}
                 {items.length === 0 && !isLoading && (
-                    <div className="w-full text-center space-y-12">
+                    <div className="w-full text-center space-y-16 animate-in fade-in zoom-in duration-500">
 
-                        <div className="space-y-2">
-                            <p className="text-gray-400 text-sm uppercase tracking-wider">Total del Recibo</p>
-                            <h2 className="text-6xl font-bold text-white tracking-tighter">$0.00</h2>
+                        <div className="space-y-4">
+                            <p className="text-purple-400/60 text-xs font-bold uppercase tracking-[0.2em]">Escáner de Inteligencia Artificial</p>
+                            <h2 className="text-7xl font-bold tracking-tighter bg-gradient-to-b from-white to-white/20 bg-clip-text text-transparent">
+                                $0.00
+                            </h2>
+                            <p className="text-white/40 max-w-xs mx-auto text-sm leading-relaxed">
+                                Sube una foto de tu recibo y divide la cuenta con tus amigos en segundos.
+                            </p>
                         </div>
 
-                        {/* Error Message */}
                         {error && (
-                            <div className="bg-red-900/30 border border-red-800 text-red-200 p-4 rounded-xl max-w-md mx-auto">
+                            <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-2xl max-w-md mx-auto text-sm">
                                 {error}
                             </div>
                         )}
 
-                        {/* Botón Flotante Gigante (Estilo Captura) */}
-                        <div className="fixed bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-black to-transparent">
-                            <label className="cursor-pointer group relative block w-full max-w-3xl mx-auto">
+                        {/* Botón de Acción Principal (Control Inferior) */}
+                        <div className="fixed bottom-10 left-0 right-0 p-6 z-40">
+                            <label className="cursor-pointer group relative block w-full max-w-sm mx-auto overflow-hidden rounded-full">
                                 <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
 
-                                {/* Glow Effect */}
-                                <div className="absolute -inset-1 bg-gradient-to-r from-purple-600 to-green-400 rounded-full blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                                {/* Background Shimmer */}
+                                <div className="absolute inset-0 bg-gradient-to-r from-purple-600 via-blue-500 to-purple-600 bg-[length:200%_auto] animate-gradient transition duration-1000"></div>
 
                                 {/* Button Body */}
-                                <div className="relative h-16 bg-gradient-to-r from-purple-800 to-emerald-600 rounded-full flex items-center justify-center gap-3 transition-transform active:scale-95">
+                                <div className="relative h-16 bg-black/20 backdrop-blur-sm flex items-center justify-center gap-3 active:scale-95 transition-transform duration-200">
                                     <Icons.Scan />
                                     <span className="font-bold text-lg">Escanear Recibo</span>
                                 </div>
@@ -114,56 +129,80 @@ export default function BillSplitterFeature() {
                     </div>
                 )}
 
-                {/* Pantalla de Carga */}
+                {/* Cargando con Estilo */}
                 {isLoading && (
-                    <div className="text-center space-y-4">
-                        <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mx-auto"></div>
-                        <p className="text-purple-300 animate-pulse">Analizando con IA...</p>
+                    <div className="text-center space-y-8 animate-in fade-in duration-300">
+                        <div className="relative w-24 h-24 mx-auto">
+                            <div className="absolute inset-0 border-4 border-purple-500/10 rounded-full"></div>
+                            <div className="absolute inset-0 border-4 border-t-purple-500 rounded-full animate-spin"></div>
+                            <div className="absolute inset-4 bg-purple-500/20 rounded-full blur-xl animate-pulse"></div>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-xl font-bold">Analizando Recibo</p>
+                            <p className="text-white/40 text-sm italic">Gemini 1.5 está leyendo los datos...</p>
+                        </div>
                     </div>
                 )}
 
-                {/* Lista de Items (Resultados) */}
+                {/* Lista de Resultados Post-Lulú */}
                 {items.length > 0 && (
-                    <div className="w-full space-y-6 pb-32">
-                        <div className="flex justify-between items-end border-b border-white/10 pb-4">
-                            <h3 className="text-2xl font-bold">Items Detectados</h3>
-                            <p className="text-emerald-400 font-mono text-xl">${totals.toFixed(2)}</p>
+                    <div className="w-full space-y-8 pb-32 animate-in slide-in-from-bottom-5 duration-500">
+                        <div className="flex justify-between items-end border-b border-white/5 pb-6">
+                            <div>
+                                <h3 className="text-3xl font-bold tracking-tight">Recibo</h3>
+                                <p className="text-white/40 text-sm mt-1">Toca un item para asignarlo</p>
+                            </div>
+                            <p className="text-emerald-400 font-mono text-3xl font-bold tracking-tighter">${totalBill.toFixed(2)}</p>
                         </div>
 
-                        <div className="grid gap-3">
-                            {items.map((item) => (
-                                <div
-                                    key={item.id}
-                                    onClick={() => setModalItem(item)}
-                                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex justify-between items-center ${item.assignedTo.length > 0 ? 'bg-purple-900/20 border-purple-500/50' : 'bg-white/5 border-white/10 hover:bg-white/10'}`}
-                                >
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-medium text-lg">{item.name}</span>
-                                            {item.assignedTo.length > 0 && <Icons.Check />}
+                        <div className="grid gap-4">
+                            {items.map((item) => {
+                                const isAssigned = item.assignedTo.length > 0;
+                                return (
+                                    <div
+                                        key={item.id}
+                                        onClick={() => setModalItem(item)}
+                                        className={`group p-5 rounded-3xl border transition-all duration-300 cursor-pointer flex justify-between items-center ${isAssigned
+                                                ? 'bg-purple-500/10 border-purple-500/30 shadow-[0_0_20px_-5px_rgba(168,85,247,0.2)]'
+                                                : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/20'
+                                            }`}
+                                    >
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`font-semibold text-lg transition-colors ${isAssigned ? 'text-purple-300' : 'text-white/90'}`}>{item.name}</span>
+                                                {isAssigned && <Icons.Check />}
+                                            </div>
+                                            <div className="flex items-center gap-1.5">
+                                                <p className="text-sm text-white/40">
+                                                    {isAssigned
+                                                        ? item.assignedTo.map(id => people.find(p => p.id === id)?.name).join(', ')
+                                                        : 'Sin asignar'}
+                                                </p>
+                                            </div>
                                         </div>
-                                        <p className="text-sm text-gray-400">
-                                            {item.assignedTo.length > 0
-                                                ? item.assignedTo.map(id => people.find(p => p.id === id)?.name).join(', ')
-                                                : 'Toca para asignar'}
-                                        </p>
+                                        <div className="text-right">
+                                            <span className={`font-bold text-xl tracking-tight transition-colors ${isAssigned ? 'text-purple-300' : 'text-white'}`}>
+                                                ${item.price.toFixed(2)}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <span className="font-bold text-lg">${item.price.toFixed(2)}</span>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
-                        {/* Reset Button */}
-                        <button
-                            onClick={() => setItems([])}
-                            className="w-full py-4 text-gray-500 hover:text-red-400 text-sm transition-colors"
-                        >
-                            Cancelar y empezar de nuevo
-                        </button>
+                        {/* Pie de página con acciones */}
+                        <div className="flex flex-col items-center gap-4 pt-8">
+                            <button
+                                onClick={() => setItems([])}
+                                className="px-8 py-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-full text-sm font-medium hover:bg-red-500/20 transition-all"
+                            >
+                                Borrar y empezar de nuevo
+                            </button>
+                        </div>
                     </div>
                 )}
 
-                {/* Modal Simple */}
+                {/* Modal adaptado al Dark Mode */}
                 <ItemAssignmentModal
                     item={modalItem}
                     people={people}
