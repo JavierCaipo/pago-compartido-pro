@@ -1,85 +1,65 @@
 'use server';
 
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { RawItem } from "../types";
-
-const receiptSchema: any = {
-    type: SchemaType.ARRAY,
-    description: "Lista de artículos de la factura.",
-    items: {
-        type: SchemaType.OBJECT,
-        properties: {
-            name: {
-                type: SchemaType.STRING,
-                description: "Nombre del artículo.",
-            },
-            price: {
-                type: SchemaType.NUMBER,
-                description: "Precio del artículo.",
-            },
-        },
-        required: ["name", "price"],
-    },
-};
 
 export async function analyzeReceiptAction(formData: FormData): Promise<RawItem[]> {
     const apiKey = process.env.GEMINI_API_KEY;
 
+    // Validación estricta de API Key
     if (!apiKey) {
-        console.error("CRITICAL: GEMINI_API_KEY is not set in environment variables.");
-        throw new Error("Server Error: Configuración de API no encontrada.");
+        console.error("❌ ERROR CRÍTICO: GEMINI_API_KEY no está definida en Vercel.");
+        throw new Error("Error de configuración del servidor (API Key faltante).");
     }
 
     const file = formData.get('file') as File;
     if (!file) {
-        throw new Error("No se subió ningún archivo.");
+        throw new Error("No se recibió ningún archivo de imagen.");
     }
 
     try {
-        // Convertir File a ArrayBuffer y luego a Base64 para Gemini
+        // 1. Convertir imagen a formato compatible con Gemini
         const arrayBuffer = await file.arrayBuffer();
         const base64Data = Buffer.from(arrayBuffer).toString('base64');
 
+        // 2. Inicializar cliente (usando la librería estable)
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.0-flash",
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: receiptSchema,
-            }
-        });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        const prompt = "Analiza esta factura y extrae cada artículo con su precio. Devuelve los datos en formato JSON. No incluyas impuestos, propinas ni totales en la lista de artículos.";
+        // 3. Prompt optimizado para JSON
+        const prompt = `Analiza este recibo. Extrae items y precios.
+    Reglas:
+    - Ignora totales, subtotales e impuestos.
+    - Devuelve SOLO un array JSON válido: [{"name": "Item", "price": 10.0}]
+    - Si no puedes leer algo, ignóralo.`;
 
         const result = await model.generateContent([
+            prompt,
             {
                 inlineData: {
-                    mimeType: file.type,
-                    data: base64Data
-                }
+                    data: base64Data,
+                    mimeType: file.type || "image/jpeg",
+                },
             },
-            { text: prompt }
         ]);
 
-        const response = result.response;
-        const textResponse = response.text();
+        const response = await result.response;
+        let text = response.text();
 
-        if (!textResponse) {
-            console.error("Gemini Error: Empty response text.");
-            throw new Error("La IA devolvió una respuesta vacía.");
-        }
+        // Limpieza de respuesta (quita ```json y ```)
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
-        const parsedResponse = JSON.parse(textResponse);
+        const parsed = JSON.parse(text);
 
-        if (Array.isArray(parsedResponse)) {
-            return parsedResponse as RawItem[];
-        } else {
-            console.error("Gemini Error: Invalid response format.", textResponse);
-            throw new Error("Formato de respuesta inválido.");
-        }
+        if (!Array.isArray(parsed)) throw new Error("Formato de respuesta inválido");
 
-    } catch (error) {
-        console.error("CRITICAL ERROR in analyzeReceiptAction:", error);
-        throw new Error("Error procesando la factura. Intenta con una imagen más clara.");
+        return parsed.map((p: any) => ({
+            name: p.name || "Item",
+            price: Number(p.price) || 0
+        }));
+
+    } catch (error: any) {
+        console.error("🔥 Error en IA:", error);
+        throw new Error("No se pudo leer el recibo. Intenta con una foto más clara.");
     }
 }
