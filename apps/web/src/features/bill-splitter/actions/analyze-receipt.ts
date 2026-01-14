@@ -3,59 +3,41 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { RawItem } from "../types";
 
-/**
- * Server Action para analizar recibos usando Gemini 1.5 Flash.
- * Optimizado para Next.js 15 y desplegado en Vercel.
- */
 export async function analyzeReceiptAction(formData: FormData): Promise<RawItem[]> {
-    console.log("🚀 [analyzeReceiptAction]: Inicio de análisis.");
+    console.log("🔹 [Server] Iniciando análisis...");
 
+    // 1. CHEQUEO DE SEGURIDAD
     const apiKey = process.env.GEMINI_API_KEY;
-
     if (!apiKey) {
-        console.error("❌ [analyzeReceiptAction]: GEMINI_API_KEY no encontrada.");
-        throw new Error("Configuración del servidor incompleta.");
+        console.error("❌ [FATAL] GEMINI_API_KEY no encontrada en variables de entorno Vercel.");
+        throw new Error("Error de Servidor: API Key no configurada.");
     }
 
     const file = formData.get('file') as File;
     if (!file) {
-        console.warn("⚠️ [analyzeReceiptAction]: No se recibió archivo.");
-        throw new Error("No se seleccionó ninguna imagen.");
+        throw new Error("No se recibió archivo.");
     }
 
     try {
-        console.log(`📸 [analyzeReceiptAction]: Procesando imagen: ${file.name} (${file.type})`);
-
-        // 1. Preparar datos para Gemini
+        // 2. PROCESAMIENTO
         const arrayBuffer = await file.arrayBuffer();
         const base64Data = Buffer.from(arrayBuffer).toString('base64');
 
-        // 2. Configurar IA
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
-            generationConfig: { responseMimeType: "application/json" }
-        });
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        // 3. Prompt de sistema ultra-específico para evitar basura en el JSON
-        const systemPrompt = `
-            Actúa como un experto en OCR de recibos. Tu tarea es extraer items y precios de la imagen proporcionada.
-            
-            REGLAS ESTRICTAS:
-            1. Devuelve ÚNICAMENTE un array JSON válido.
-            2. Formato: [{"name": "Nombre del Item", "price": 10.50}]
-            3. Ignora subtotales, impuestos (IVA/TAX), propinas (TIPS) y el total final.
-            4. Si el nombre del item incluye cantidades (ej. 2x Pizza), inclúyelo tal cual.
-            5. Convierte los precios a números float.
-            6. Si la imagen es ilegible, devuelve un array vacío [].
-            
-            RESPUESTA ESPERADA: Un array JSON puro, sin bloques de código markdown.
-        `;
+        // 3. PROMPT DE INGENIERÍA
+        const prompt = `Actúa como un sistema OCR financiero.
+    Analiza la imagen y extrae una lista de productos consumidos y sus precios.
+    REGLAS:
+    - Ignora subtotales, impuestos, propinas y totales finales.
+    - Devuelve SOLO un array JSON válido.
+    - Formato: [{"name": "Nombre Plato", "price": 15.50}]
+    - Si no puedes leer nada, devuelve array vacío [].`;
 
-        console.log("🤖 [analyzeReceiptAction]: Llamando a Gemini API...");
-
+        console.log("🔹 [Server] Enviando a Gemini...");
         const result = await model.generateContent([
-            { text: systemPrompt },
+            prompt,
             {
                 inlineData: {
                     data: base64Data,
@@ -65,28 +47,24 @@ export async function analyzeReceiptAction(formData: FormData): Promise<RawItem[
         ]);
 
         const response = await result.response;
-        const text = response.text();
+        let text = response.text();
 
-        console.log("✅ [analyzeReceiptAction]: Respuesta recibida de la IA.");
+        // Limpieza de Markdown
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        console.log("🔹 [Server] Respuesta Raw:", text.substring(0, 50) + "...");
 
-        // Limpieza de posibles bloques de código si la IA los incluye
-        const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(cleanJson);
+        const parsed = JSON.parse(text);
 
-        if (!Array.isArray(parsed)) {
-            throw new Error("La IA no devolvió un formato de lista válido.");
-        }
+        if (!Array.isArray(parsed)) throw new Error("La IA no devolvió una lista válida.");
 
-        const items: RawItem[] = parsed.map((p: any) => ({
-            name: String(p.name || "Item desconocido"),
-            price: parseFloat(String(p.price || 0))
+        return parsed.map((item: any) => ({
+            name: item.name || "Item sin nombre",
+            price: Number(item.price) || 0
         }));
 
-        console.log(`📊 [analyzeReceiptAction]: Se detectaron ${items.length} items.`);
-        return items;
-
     } catch (error: any) {
-        console.error("🔥 [analyzeReceiptAction]: Error Fatal:", error);
-        throw new Error("No pudimos procesar el recibo. Intenta con una foto más nítida.");
+        console.error("🔥 [Server Error]:", error);
+        // Este mensaje exacto se mostrará en la UI
+        throw new Error(`Fallo al analizar: ${error.message}`);
     }
 }
