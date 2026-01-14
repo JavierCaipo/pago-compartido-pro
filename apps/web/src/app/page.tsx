@@ -1,8 +1,9 @@
+import BillSplitterFeature from '@/features/bill-splitter/components/BillSplitterFeature';
+
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-24">
-      <h1 className="text-4xl font-bold">🚀 Antigravity SaaS Factory</h1>
-      <p className="mt-4 text-xl text-gray-600">Estructura Feature-First inicializada.</p>
+    <main className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+      <BillSplitterFeature />
     </main>
   );
 }
