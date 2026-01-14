@@ -1,358 +1,310 @@
 'use client';
 
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Item, Person, RawItem } from '../types';
 import { analyzeReceiptAction } from '../actions/analyze-receipt';
-import Spinner from './Spinner';
+import ItemAssignmentModal from './ItemAssignmentModal';
 
-type ViewMode = 'upload' | 'items' | 'summary';
+// --- Iconos Inline (Para no depender de librerías externas por ahora) ---
+const Icons = {
+    Upload: () => (
+        <svg className="w-12 h-12 text-indigo-500 mb-4 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+        </svg>
+    ),
+    Camera: () => (
+        <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H3a2 2 0 01-2-2V9z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+    ),
+    UserPlus: () => (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+        </svg>
+    ),
+    Check: () => (
+        <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+        </svg>
+    ),
+    Trash: () => (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        </svg>
+    )
+};
 
-const BillSplitterFeature: React.FC = () => {
-    // State
-    const [viewMode, setViewMode] = useState<ViewMode>('upload');
-    const [isLoading, setIsLoading] = useState<boolean>(false);
-    const [error, setError] = useState<string | null>(null);
+export default function BillSplitterFeature() {
+    // Estado para evitar errores de hidratación/SSR
+    const [isMounted, setIsMounted] = useState(false);
+
+    // Estados de la App
+    const [view, setView] = useState<'items' | 'summary'>('items');
     const [items, setItems] = useState<Item[]>([]);
     const [people, setPeople] = useState<Person[]>([]);
-    const [nextPersonId, setNextPersonId] = useState<number>(1);
-    const [isSSR, setIsSSR] = useState(true);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [modalItem, setModalItem] = useState<Item | null>(null);
 
-    // File input ref for the FAB
-    const fileInputRef = useRef<HTMLInputElement>(null);
-
-    // Avoid hydration mismatch
+    // Efecto para marcar montaje
     useEffect(() => {
-        setIsSSR(false);
-        // Initialize default people if empty
-        if (people.length === 0) {
-            setPeople([
-                { id: 1, name: 'Tú' },
-                { id: 2, name: 'Ana' },
-            ]);
-            setNextPersonId(3);
-        }
-    }, [people.length]);
+        setIsMounted(true);
+    }, []);
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // --- Lógica de Negocio ---
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
         setIsLoading(true);
         setError(null);
-        setItems([]);
 
         try {
             const formData = new FormData();
             formData.append('file', file);
 
-            const extractedItems: RawItem[] = await analyzeReceiptAction(formData);
+            const rawItems = await analyzeReceiptAction(formData);
 
-            setItems(extractedItems.map((item, index) => ({
-                id: index,
+            setItems(rawItems.map((item, idx) => ({
+                id: idx,
                 name: item.name,
                 price: item.price,
-                assignedTo: [],
+                assignedTo: []
             })));
 
-            setViewMode('items');
+            // Personas iniciales
+            setPeople([
+                { id: 1, name: 'Yo' },
+                { id: 2, name: 'Amigo' }
+            ]);
+
         } catch (err) {
             console.error(err);
-            setError(err instanceof Error ? err.message : 'Error procesando la factura.');
+            setError("No pudimos leer el recibo. Intenta con una imagen más clara.");
         } finally {
             setIsLoading(false);
         }
     };
 
-    const toggleItemAssignment = (itemId: number, personId: number) => {
-        setItems(current => current.map(item => {
-            if (item.id === itemId) {
-                const isAssigned = item.assignedTo.includes(personId);
-                return {
-                    ...item,
-                    assignedTo: isAssigned
-                        ? item.assignedTo.filter(id => id !== personId)
-                        : [...item.assignedTo, personId]
-                };
-            }
-            return item;
-        }));
+    const addPerson = () => {
+        const nextId = people.length > 0 ? Math.max(...people.map(p => p.id)) + 1 : 1;
+        setPeople([...people, { id: nextId, name: `Persona ${nextId}` }]);
     };
 
-    const personTotals = useMemo(() => {
-        const totals = new Map<number, number>();
-        people.forEach(person => totals.set(person.id, 0));
+    const removePerson = (id: number) => {
+        setPeople(people.filter(p => p.id !== id));
+        setItems(items.map(item => ({
+            ...item,
+            assignedTo: item.assignedTo.filter(pId => pId !== id)
+        })));
+    };
+
+    const handleAssign = (itemId: number, assignedTo: number[]) => {
+        setItems(items.map(i => i.id === itemId ? { ...i, assignedTo } : i));
+    };
+
+    // Cálculos
+    const totals = useMemo(() => {
+        const map = new Map<number, number>();
+        people.forEach(p => map.set(p.id, 0));
+
+        let unassigned = 0;
 
         items.forEach(item => {
-            if (item.assignedTo.length > 0) {
-                const pricePerPerson = item.price / item.assignedTo.length;
-                item.assignedTo.forEach(personId => {
-                    totals.set(personId, (totals.get(personId) || 0) + pricePerPerson);
+            if (item.assignedTo.length === 0) {
+                unassigned += item.price;
+            } else {
+                const splitPrice = item.price / item.assignedTo.length;
+                item.assignedTo.forEach(pId => {
+                    map.set(pId, (map.get(pId) || 0) + splitPrice);
                 });
             }
         });
-        return totals;
+
+        return { map, unassigned };
     }, [items, people]);
 
-    const grandTotal = useMemo(() => {
-        return items.reduce((sum, item) => sum + item.price, 0);
-    }, [items]);
-
-    const getPersonInitials = (name: string) => {
-        return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-    };
-
-    if (isSSR) {
-        return (
-            <div className="flex h-screen w-full items-center justify-center bg-background-dark">
-                <Spinner />
-            </div>
-        );
-    }
+    // --- Renderizado Seguro (SSR Fix) ---
+    if (!isMounted) return <div className="min-h-screen bg-gray-50" />;
 
     return (
-        <div className="relative z-10 flex flex-col h-screen max-w-md mx-auto overflow-hidden bg-background-light dark:bg-background-dark font-display text-gray-900 dark:text-white antialiased">
+        <div className="min-h-screen bg-gray-50 pb-20 font-sans text-gray-900">
 
-            {/* Organic Background Shapes */}
-            <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-                <div className="absolute -top-[10%] -left-[10%] w-[70vw] h-[70vw] rounded-full bg-primary/10 blur-[100px] mix-blend-screen opacity-50"></div>
-                <div className="absolute top-[40%] -right-[10%] w-[80vw] h-[80vw] rounded-full bg-indigo-900/20 blur-[120px] mix-blend-screen opacity-50"></div>
-            </div>
-
-            {/* Error Message */}
-            {error && (
-                <div className="fixed top-4 left-4 right-4 z-[100] p-4 bg-red-500/90 backdrop-blur-md text-white rounded-xl shadow-lg flex justify-between items-center animate-in fade-in slide-in-from-top-4">
-                    <p className="text-sm font-bold">{error}</p>
-                    <button onClick={() => setError(null)} className="material-symbols-outlined w-6 h-6">close</button>
-                </div>
-            )}
-
-            {/* View Switching */}
-            {viewMode === 'upload' && (
-                <div className="relative z-10 flex flex-col h-full items-center justify-center px-6 text-center space-y-12">
-                    <div className="space-y-4">
-                        <h1 className="text-5xl font-extrabold tracking-tight text-white leading-tight">Pago Compartido</h1>
-                        <p className="text-gray-400 text-lg">Escanea tu recibo y divide la cuenta con IA</p>
-                    </div>
-
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isLoading}
-                        className="group relative flex flex-col items-center gap-6 p-10 rounded-3xl bg-white/5 border border-white/10 hover:border-primary/50 transition-all duration-300 w-full shadow-2xl"
-                    >
-                        {isLoading ? (
-                            <div className="flex flex-col items-center gap-4">
-                                <Spinner />
-                                <span className="text-primary font-bold animate-pulse">Analizando Recibo...</span>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center text-primary transition-transform group-hover:scale-110">
-                                    <span className="material-symbols-outlined text-5xl">document_scanner</span>
-                                </div>
-                                <span className="text-xl font-bold text-white">Escanear Recibo</span>
-                            </>
-                        )}
-                    </button>
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        className="hidden"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                    />
-                </div>
-            )}
-
-            {viewMode === 'items' && (
-                <>
-                    {/* Header Section */}
-                    <header className="relative z-20 flex-none px-6 pt-12 pb-2">
-                        <div className="flex items-center justify-between h-12 mb-4">
+            {/* Header */}
+            <header className="bg-white shadow-sm sticky top-0 z-10">
+                <div className="max-w-3xl mx-auto px-4 py-4 flex justify-between items-center">
+                    <h1 className="text-xl font-bold text-indigo-600 flex items-center gap-2">
+                        🧾 Pago Compartido
+                    </h1>
+                    {items.length > 0 && (
+                        <div className="flex bg-gray-100 rounded-lg p-1">
                             <button
-                                onClick={() => setViewMode('upload')}
-                                className="flex items-center justify-center w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 transition-colors backdrop-blur-sm text-white"
+                                onClick={() => setView('items')}
+                                className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${view === 'items' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
                             >
-                                <span className="material-symbols-outlined w-6 h-6">arrow_back</span>
+                                Items
                             </button>
                             <button
-                                onClick={() => setViewMode('summary')}
-                                className="px-4 py-2 text-sm font-bold text-neon-green hover:text-white transition-colors"
+                                onClick={() => setView('summary')}
+                                className={`px-3 py-1 rounded-md text-sm font-medium transition-all ${view === 'summary' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
                             >
                                 Resumen
                             </button>
                         </div>
-                        <div className="space-y-1">
-                            <h1 className="text-3xl font-bold tracking-tight text-white leading-tight">Asignar Ítems</h1>
-                            <p className="text-gray-400 text-sm font-medium">Toca un ítem para asignártelo</p>
-                        </div>
-                    </header>
-
-                    {/* Summary / Total */}
-                    <div className="relative z-20 flex-none px-6 py-4">
-                        <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/5 rounded-2xl backdrop-blur-md">
-                            <span className="text-gray-400 text-sm font-medium mb-1 uppercase tracking-widest">Total del Recibo</span>
-                            <h2 className="text-4xl font-extrabold text-white tracking-tight">$ {grandTotal.toFixed(2)}</h2>
-                        </div>
-                    </div>
-
-                    {/* Scrollable List Area */}
-                    <div className="relative z-20 flex-1 overflow-y-auto no-scrollbar px-6 pb-32 space-y-4">
-                        <p className="text-xs font-bold text-gray-500 uppercase tracking-widest pl-1 mb-2">Ítems ({items.length})</p>
-
-                        {items.map(item => {
-                            const isAssignedToMe = item.assignedTo.includes(1); // "Tú" is ID 1
-                            return (
-                                <div
-                                    key={item.id}
-                                    onClick={() => toggleItemAssignment(item.id, 1)}
-                                    className={`group relative border transition-all duration-300 rounded-2xl p-4 cursor-pointer active:scale-95 ${isAssignedToMe
-                                            ? 'bg-card-dark border-primary/40 shadow-glow'
-                                            : 'bg-card-dark/60 border-white/5 border-dashed hover:bg-card-dark'
-                                        }`}
-                                >
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div className="pr-4">
-                                            <p className="text-white text-lg font-bold leading-tight">{item.name}</p>
-                                        </div>
-                                        <div className="shrink-0">
-                                            <p className={`text-xl font-bold tracking-tight transition-colors ${isAssignedToMe ? 'text-primary' : 'text-gray-400 opacity-70'}`}>
-                                                ${item.price.toFixed(2)}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex flex-wrap gap-2">
-                                        {item.assignedTo.map(pId => {
-                                            const person = people.find(p => p.id === pId);
-                                            if (!person) return null;
-                                            return (
-                                                <div key={pId} className={`flex items-center gap-2 pl-1 pr-3 py-1 rounded-full text-[10px] font-bold ${pId === 1 ? 'bg-primary/20 border border-primary/20 text-white' : 'bg-white/5 border border-white/5 text-gray-300'}`}>
-                                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center shadow-sm ${pId === 1 ? 'bg-gradient-to-br from-primary to-fuchsia-500' : 'bg-gradient-to-br from-blue-400 to-blue-600'}`}>
-                                                        {getPersonInitials(person.name)}
-                                                    </div>
-                                                    <span>{pId === 1 ? 'Tú' : person.name}</span>
-                                                </div>
-                                            );
-                                        })}
-                                        {item.assignedTo.length === 0 && (
-                                            <div className="flex items-center gap-2 text-gray-600">
-                                                <div className="w-2 h-2 rounded-full bg-gray-700"></div>
-                                                <span className="text-[10px] uppercase font-bold tracking-tighter">Sin asignar</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                        <div className="h-8"></div>
-                    </div>
-
-                    {/* Bottom Gradient Overlay */}
-                    <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-background-dark to-transparent pointer-events-none z-20"></div>
-                </>
-            )}
-
-            {viewMode === 'summary' && (
-                <>
-                    {/* Top App Bar */}
-                    <div className="sticky top-0 z-50 flex items-center bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md p-4 pb-2 justify-between border-b border-white/5">
-                        <button
-                            onClick={() => setViewMode('items')}
-                            className="text-gray-800 dark:text-white flex size-12 shrink-0 items-center justify-start hover:opacity-70 transition-opacity"
-                        >
-                            <span className="material-symbols-outlined w-7 h-7">arrow_back</span>
-                        </button>
-                        <h2 className="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center">Resumen de Gastos</h2>
-                        <div className="w-12"></div>
-                    </div>
-
-                    {/* Grand Total Headline */}
-                    <div className="relative z-10 flex flex-col items-center justify-center pt-8 pb-10 text-center">
-                        <span className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">Total Consumido</span>
-                        <h1 className="text-gray-900 dark:text-white tracking-tight text-5xl font-extrabold leading-none px-4 inline-block bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                            ${grandTotal.toFixed(2)}
-                        </h1>
-                    </div>
-
-                    {/* List of Person Cards */}
-                    <div className="relative z-10 flex flex-col gap-5 px-5 pb-40 overflow-y-auto no-scrollbar">
-                        {people.map(person => {
-                            const total = personTotals.get(person.id) || 0;
-                            const assignedItems = items.filter(it => it.assignedTo.includes(person.id));
-                            const initials = getPersonInitials(person.name);
-                            const isMe = person.id === 1;
-
-                            return (
-                                <div key={person.id} className="group relative flex flex-col gap-4 bg-white dark:bg-card-dark p-6 rounded-2xl shadow-xl dark:shadow-none border border-gray-100 dark:border-white/5 transition-all hover:border-primary/20">
-                                    <div className="flex items-start justify-between gap-4">
-                                        {/* Avatar */}
-                                        <div className={`aspect-square rounded-full h-14 w-14 flex items-center justify-center shrink-0 shadow-lg ${isMe ? 'bg-gradient-to-br from-primary to-fuchsia-500 shadow-primary/30' : 'bg-gradient-to-br from-cyan-400 to-blue-600 shadow-blue-500/30'
-                                            }`}>
-                                            <span className="text-white text-lg font-bold tracking-tight">{initials}</span>
-                                        </div>
-                                        {/* Content */}
-                                        <div className="flex flex-1 flex-col">
-                                            <div className="flex justify-between items-start">
-                                                <p className="text-gray-900 dark:text-white text-lg font-bold leading-tight">{person.name}</p>
-                                                <span className="material-symbols-outlined text-gray-600 w-5 h-5">expand_more</span>
-                                            </div>
-                                            {/* Large Total */}
-                                            <p className={`text-3xl font-extrabold leading-tight mt-1 mb-3 ${total > 0 ? 'text-primary' : 'text-gray-500 opacity-50'}`}>
-                                                ${total.toFixed(2)}
-                                            </p>
-                                            {/* Items List */}
-                                            <div className="flex flex-wrap gap-2">
-                                                {assignedItems.length > 0 ? (
-                                                    assignedItems.map(it => (
-                                                        <div key={it.id} className="inline-flex items-center rounded-lg bg-gray-100 dark:bg-white/5 px-2 py-1 text-[10px] font-bold text-gray-600 dark:text-gray-300 border border-transparent dark:border-white/5">
-                                                            {it.name}
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <p className="text-gray-400 dark:text-gray-600 text-xs italic font-medium">Sin ítems asignados</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-
-                    {/* Bottom Action Bar */}
-                    <div className="fixed bottom-0 left-0 w-full p-6 bg-gradient-to-t from-background-dark via-background-dark to-transparent pt-12 z-50">
-                        <button
-                            onClick={() => alert('¡Proximamente integración con Mercado Pago!')}
-                            className="w-full bg-primary hover:bg-purple-600 text-white font-bold text-lg py-4 rounded-2xl shadow-2xl shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
-                        >
-                            <span className="material-symbols-outlined w-6 h-6">payment</span>
-                            Dividir con Amigos
-                        </button>
-                    </div>
-                </>
-            )}
-
-            {/* Floating Scan Button (Global) */}
-            {(viewMode === 'items' || viewMode === 'summary') && (
-                <div className="fixed bottom-28 left-0 right-0 flex justify-center z-[60] pointer-events-none">
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        className="pointer-events-auto shadow-glow group relative flex items-center gap-3 px-6 py-3 rounded-full bg-white/5 backdrop-blur-md border border-white/10 hover:border-primary/50 transition-all duration-300 transform active:scale-95"
-                    >
-                        <span className="material-symbols-outlined text-white text-[24px] w-6 h-6">document_scanner</span>
-                        <span className="text-white font-bold text-sm tracking-wide">Nuevo Escaneo</span>
-                    </button>
-                    <input
-                        type="file"
-                        ref={fileInputRef}
-                        className="hidden"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                    />
+                    )}
                 </div>
-            )}
+            </header>
+
+            <main className="max-w-3xl mx-auto px-4 py-6">
+
+                {/* Estado Inicial: Carga */}
+                {items.length === 0 && !isLoading && (
+                    <div className="mt-10 bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center max-w-md mx-auto">
+                        <div className="bg-indigo-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <Icons.Upload />
+                        </div>
+                        <h2 className="text-2xl font-bold mb-2">Sube tu factura</h2>
+                        <p className="text-gray-500 mb-8">La IA detectará los artículos y precios automáticamente.</p>
+
+                        <label className="block w-full cursor-pointer bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-6 rounded-xl transition-transform active:scale-95 shadow-lg shadow-indigo-200">
+                            <span>📸 Escanear o Subir Imagen</span>
+                            <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} />
+                        </label>
+
+                        {error && (
+                            <div className="mt-6 p-4 bg-red-50 text-red-600 rounded-lg text-sm border border-red-100">
+                                {error}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Estado de Carga */}
+                {isLoading && (
+                    <div className="flex flex-col items-center justify-center py-20">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
+                        <p className="text-gray-500 animate-pulse">Analizando recibo con IA...</p>
+                    </div>
+                )}
+
+                {/* Vista Principal */}
+                {items.length > 0 && view === 'items' && (
+                    <div className="grid md:grid-cols-3 gap-6">
+
+                        {/* Columna Izquierda: Personas (Sticky en Desktop) */}
+                        <div className="md:col-span-1">
+                            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sticky top-24">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-bold text-gray-700">Personas</h3>
+                                    <button onClick={addPerson} className="text-indigo-600 hover:bg-indigo-50 p-1 rounded-full">
+                                        <Icons.UserPlus />
+                                    </button>
+                                </div>
+                                <div className="space-y-2 max-h-60 overflow-y-auto">
+                                    {people.map(person => (
+                                        <div key={person.id} className="flex justify-between items-center group p-2 hover:bg-gray-50 rounded-lg">
+                                            <input
+                                                className="bg-transparent border-none focus:ring-0 font-medium text-gray-800 w-full"
+                                                value={person.name}
+                                                onChange={(e) => setPeople(people.map(p => p.id === person.id ? { ...p, name: e.target.value } : p))}
+                                            />
+                                            <button onClick={() => removePerson(person.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <Icons.Trash />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Columna Derecha: Lista de Items */}
+                        <div className="md:col-span-2 space-y-4">
+                            <div className="flex justify-between items-end px-1">
+                                <h3 className="font-bold text-gray-700">Artículos ({items.length})</h3>
+                                {totals.unassigned > 0 && (
+                                    <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-1 rounded-full">
+                                        Falta: ${totals.unassigned.toFixed(2)}
+                                    </span>
+                                )}
+                            </div>
+
+                            {items.map(item => {
+                                const isAssigned = item.assignedTo.length > 0;
+                                return (
+                                    <div
+                                        key={item.id}
+                                        onClick={() => setModalItem(item)}
+                                        className={`p-4 rounded-xl border cursor-pointer transition-all active:scale-[0.99] ${isAssigned ? 'bg-white border-indigo-100 shadow-sm' : 'bg-white border-gray-100 hover:border-indigo-300'}`}
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <p className={`font-medium ${isAssigned ? 'text-gray-900' : 'text-gray-700'}`}>{item.name}</p>
+                                                    {isAssigned && <Icons.Check />}
+                                                </div>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    {isAssigned
+                                                        ? item.assignedTo.map(id => people.find(p => p.id === id)?.name).join(', ')
+                                                        : 'Toque para asignar'}
+                                                </p>
+                                            </div>
+                                            <span className="font-bold text-lg text-indigo-600 ml-4">
+                                                ${item.price.toFixed(2)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {/* Vista Resumen */}
+                {items.length > 0 && view === 'summary' && (
+                    <div className="max-w-md mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                        {people.map(person => {
+                            const amount = totals.map.get(person.id) || 0;
+                            if (amount === 0) return null;
+                            return (
+                                <div key={person.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center">
+                                    <div>
+                                        <h3 className="font-bold text-xl text-gray-800">{person.name}</h3>
+                                        <p className="text-gray-500 text-sm">Debe pagar</p>
+                                    </div>
+                                    <div className="text-3xl font-black text-indigo-600 tracking-tight">
+                                        ${amount.toFixed(2)}
+                                    </div>
+                                </div>
+                            );
+                        })}
+
+                        <button
+                            onClick={() => {
+                                if (confirm('¿Reiniciar todo?')) {
+                                    setItems([]);
+                                    setView('items');
+                                }
+                            }}
+                            className="w-full py-4 text-gray-400 hover:text-red-500 text-sm font-medium transition-colors"
+                        >
+                            Comenzar nueva cuenta
+                        </button>
+                    </div>
+                )}
+            </main>
+
+            {/* Modal de Asignación */}
+            <ItemAssignmentModal
+                item={modalItem}
+                people={people}
+                onClose={() => setModalItem(null)}
+                onSave={(itemId, assigned) => {
+                    handleAssign(itemId, assigned);
+                    setModalItem(null);
+                }}
+            />
         </div>
     );
-};
-
-export default BillSplitterFeature;
+}
