@@ -3,19 +3,18 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { RawItem } from "../types";
 
-// Definimos un tipo de respuesta seguro para no romper el cliente
 type ActionResponse =
     | { success: true; data: RawItem[] }
     | { success: false; error: string };
 
 export async function analyzeReceiptAction(formData: FormData): Promise<ActionResponse> {
-    console.log("🔹 [Server] v3.5 DEBUG: Iniciando análisis...");
+    console.log("🔹 [Server] v4.0 FIX: Iniciando análisis con modelo específico...");
 
     try {
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             console.error("❌ [Server] FATAL: GEMINI_API_KEY no encontrada.");
-            return { success: false, error: "CONFIG_ERROR: API Key no configurada en Vercel." };
+            return { success: false, error: "CONFIG_ERROR: API Key no configurada." };
         }
 
         const file = formData.get('file') as File;
@@ -23,21 +22,24 @@ export async function analyzeReceiptAction(formData: FormData): Promise<ActionRe
             return { success: false, error: "UPLOAD_ERROR: No se recibió archivo." };
         }
 
-        console.log(`🔹 [Server] Procesando archivo: ${file.name} (${file.size} bytes)`);
-
         // Conversión a Base64
         const arrayBuffer = await file.arrayBuffer();
         const base64Data = Buffer.from(arrayBuffer).toString('base64');
 
         const genAI = new GoogleGenerativeAI(apiKey);
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        const prompt = `Analiza este recibo.
-    Devuelve SOLO un JSON array válido con items y precios.
-    Ejemplo: [{"name": "Coca Cola", "price": 2.50}]
+        // --- CAMBIO CLAVE: Usamos la versión PINEADA (001) ---
+        // Si gemini-1.5-flash falla, usamos gemini-1.5-flash-001 que es la versión estable específica
+        const modelName = "gemini-1.5-flash-001";
+        const model = genAI.getGenerativeModel({ model: modelName });
+
+        console.log(`🔹 [Server] Usando modelo: ${modelName}`);
+
+        const prompt = `Analiza este recibo/factura.
+    Extrae items y precios.
+    IMPORTANTE: Devuelve SOLO un JSON válido.
+    Formato: [{"name": "Producto", "price": 10.00}]
     Ignora totales.`;
-
-        console.log("🔹 [Server] Enviando a Google Gemini...");
 
         const result = await model.generateContent([
             prompt,
@@ -51,17 +53,15 @@ export async function analyzeReceiptAction(formData: FormData): Promise<ActionRe
 
         const response = await result.response;
         let text = response.text();
-        console.log("🔹 [Server] Respuesta recibida (length):", text.length);
+        console.log("🔹 [Server] Respuesta recibida:", text.substring(0, 50) + "...");
 
-        // Limpieza
+        // Limpieza JSON
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
-        // Intento de parseo
         let parsed;
         try {
             parsed = JSON.parse(text);
         } catch (e) {
-            console.error("❌ [Server] JSON Invalido:", text);
             return { success: false, error: "AI_ERROR: La IA no devolvió un JSON válido." };
         }
 
@@ -78,7 +78,12 @@ export async function analyzeReceiptAction(formData: FormData): Promise<ActionRe
 
     } catch (error: any) {
         console.error("🔥 [Server CRASH]:", error);
-        // Devolvemos el mensaje exacto del error para verlo en pantalla
+
+        // Si falla el modelo Flash, devolvemos un error descriptivo
+        if (error.message?.includes("404") || error.message?.includes("not found")) {
+            return { success: false, error: "MODEL_ERROR: El modelo 'gemini-1.5-flash-001' no está disponible en tu API Key. Verifica Google AI Studio." };
+        }
+
         return { success: false, error: `GOOGLE_ERROR: ${error.message}` };
     }
 }
