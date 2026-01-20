@@ -5,21 +5,20 @@ import { Item, Person } from '../types';
 import { analyzeReceiptAction } from '../actions/analyze-receipt';
 import ItemAssignmentModal from './ItemAssignmentModal';
 
-// --- ICONOS ---
+// --- ICONOS CON ESTILOS FORZADOS (NUCLEAR OPTION) ---
 const Icons = {
     Scan: () => (
-        <svg className="w-12 h-12 text-white mx-auto mb-2 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        // style={{...}} tiene prioridad sobre clases CSS. Esto arreglará el icono gigante sí o sí.
+        <svg
+            style={{ width: '80px', height: '80px', display: 'block', margin: '0 auto', color: 'white' }}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+        >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H3a2 2 0 01-2-2V9z" />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
     ),
-    Users: () => (
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
-    ),
     Check: () => (
-        <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg style={{ width: '20px', height: '20px' }} className="text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
         </svg>
     )
@@ -27,17 +26,13 @@ const Icons = {
 
 export default function BillSplitterFeature() {
     const [isMounted, setIsMounted] = useState(false);
-    const [step, setStep] = useState<'upload' | 'assign' | 'summary'>('upload');
-
     const [items, setItems] = useState<Item[]>([]);
     const [people, setPeople] = useState<Person[]>([{ id: 1, name: 'Yo' }, { id: 2, name: 'Amigo' }]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [modalItem, setModalItem] = useState<Item | null>(null);
 
-    useEffect(() => setIsMounted(true), []);
-
-    // --- LOGICA ---
+    useEffect(() => { setIsMounted(true); }, []);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -50,264 +45,117 @@ export default function BillSplitterFeature() {
             const formData = new FormData();
             formData.append('file', file);
 
-            const rawItems = await analyzeReceiptAction(formData);
+            // Llamada segura al servidor
+            const result = await analyzeReceiptAction(formData);
 
-            if (!rawItems || rawItems.length === 0) throw new Error("No se encontraron items.");
+            if (!result.success) {
+                // Si falló, mostramos el error exacto que vino del servidor
+                throw new Error(result.error);
+            }
 
-            setItems(rawItems.map((item, idx) => ({
-                id: idx, name: item.name, price: item.price, assignedTo: []
+            if (result.data.length === 0) {
+                throw new Error("La IA no encontró items.");
+            }
+
+            setItems(result.data.map((item, idx) => ({
+                id: idx,
+                name: item.name,
+                price: item.price,
+                assignedTo: []
             })));
-
-            setStep('assign'); // Avanzar al siguiente paso
 
         } catch (err: any) {
             console.error(err);
-            setError(err.message || "Error al leer el recibo.");
+            setError(err.message || "Error desconocido.");
         } finally {
             setIsLoading(false);
         }
     };
 
-    const addPerson = () => {
-        const nextId = people.length > 0 ? Math.max(...people.map(p => p.id)) + 1 : 1;
-        setPeople([...people, { id: nextId, name: `Persona ${nextId}` }]);
-    };
+    const totals = useMemo(() => items.reduce((acc, i) => acc + i.price, 0), [items]);
 
-    const updatePersonName = (id: number, name: string) => {
-        setPeople(people.map(p => p.id === id ? { ...p, name } : p));
-    };
-
-    const removePerson = (id: number) => {
-        if (people.length <= 1) return;
-        setPeople(people.filter(p => p.id !== id));
-        // Quitar asignaciones de esa persona
-        setItems(items.map(i => ({
-            ...i,
-            assignedTo: i.assignedTo.filter(pid => pid !== id)
-        })));
-    };
-
-    // Cálculos finales
-    const totals = useMemo(() => {
-        const map = new Map<number, number>();
-        people.forEach(p => map.set(p.id, 0));
-        let totalBill = 0;
-        let unassigned = 0;
-
-        items.forEach(item => {
-            totalBill += item.price;
-            if (item.assignedTo.length === 0) {
-                unassigned += item.price;
-            } else {
-                const splitPrice = item.price / item.assignedTo.length;
-                item.assignedTo.forEach(pid => {
-                    map.set(pid, (map.get(pid) || 0) + splitPrice);
-                });
-            }
-        });
-
-        return { map, totalBill, unassigned };
-    }, [items, people]);
-
-
-    if (!isMounted) return <div className="min-h-screen bg-[#0a0a0a]" />;
+    if (!isMounted) return <div className="min-h-screen bg-black text-white p-10">Cargando...</div>;
 
     return (
-        <div className="min-h-screen bg-[#0a0a0a] text-gray-100 font-sans selection:bg-indigo-500/30">
+        <div className="min-h-screen bg-[#0a0a0a] text-white font-sans pb-20">
 
-            {/* HEADER */}
-            <header className="p-4 border-b border-white/5 bg-[#0a0a0a]/90 backdrop-blur sticky top-0 z-20 flex justify-between items-center">
-                <h1 className="font-bold text-lg bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+            {/* HEADER DEBUG */}
+            <header className="p-4 border-b border-white/10 flex justify-between items-center bg-gray-900">
+                <h1 className="font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
                     Pago Compartido
                 </h1>
-                {step !== 'upload' && (
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => setStep('assign')}
-                            className={`text-xs px-3 py-1 rounded-full transition-colors ${step === 'assign' ? 'bg-white/10 text-white' : 'text-gray-500'}`}
-                        >
-                            Asignar
-                        </button>
-                        <button
-                            onClick={() => setStep('summary')}
-                            className={`text-xs px-3 py-1 rounded-full transition-colors ${step === 'summary' ? 'bg-white/10 text-white' : 'text-gray-500'}`}
-                        >
-                            Resumen
-                        </button>
-                    </div>
-                )}
+                <div className="px-2 py-1 bg-red-900/50 border border-red-500 rounded text-[10px] font-mono text-red-200">
+                    v3.5 DEBUG MODE
+                </div>
             </header>
 
-            <main className="max-w-md mx-auto px-4 py-6 pb-24">
+            <main className="max-w-md mx-auto px-4 py-8">
 
-                {/* ERROR */}
+                {/* --- ERROR BOX (ROJO) --- */}
                 {error && (
-                    <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex justify-between items-center">
-                        <span className="text-red-300 text-sm">{error}</span>
-                        <button onClick={() => setError(null)} className="text-red-400 font-bold">✕</button>
-                    </div>
-                )}
-
-                {/* --- PASO 1: SUBIR --- */}
-                {step === 'upload' && (
-                    <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8">
-                        {isLoading ? (
-                            <div className="text-center space-y-4">
-                                <div className="w-16 h-16 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mx-auto"></div>
-                                <p className="text-indigo-300 animate-pulse text-sm">Analizando factura...</p>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="relative group">
-                                    <label className="block cursor-pointer">
-                                        <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                                        <div className="w-40 h-40 bg-gradient-to-br from-gray-800 to-gray-900 rounded-full flex flex-col items-center justify-center border border-white/10 group-hover:border-indigo-500/50 group-hover:scale-105 transition-all shadow-2xl">
-                                            <Icons.Scan />
-                                            <span className="text-xs text-gray-400 mt-2 font-medium">Escanear</span>
-                                        </div>
-                                    </label>
-                                    <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                                </div>
-                                <p className="text-gray-500 text-sm max-w-[200px] text-center">Sube una foto. Nosotros detectamos los precios.</p>
-                            </>
-                        )}
-                    </div>
-                )}
-
-                {/* --- PASO 2: ASIGNAR --- */}
-                {step === 'assign' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-
-                        {/* Gestión de Personas */}
-                        <section className="bg-white/5 rounded-2xl p-4 border border-white/5">
-                            <div className="flex justify-between items-center mb-3">
-                                <h2 className="text-sm font-bold text-gray-300 flex items-center gap-2">
-                                    <Icons.Users /> Personas
-                                </h2>
-                                <button onClick={addPerson} className="text-xs bg-indigo-600 px-2 py-1 rounded hover:bg-indigo-500 text-white transition-colors">
-                                    + Agregar
-                                </button>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                                {people.map(p => (
-                                    <div key={p.id} className="group relative">
-                                        <input
-                                            value={p.name}
-                                            onChange={(e) => updatePersonName(p.id, e.target.value)}
-                                            className="bg-black/30 text-white text-sm px-3 py-1.5 rounded-lg border border-transparent focus:border-indigo-500 focus:outline-none w-24 text-center transition-all"
-                                        />
-                                        {people.length > 1 && (
-                                            <button
-                                                onClick={() => removePerson(p.id)}
-                                                className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                ✕
-                                            </button>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
-
-                        {/* Lista de Items */}
-                        <section className="space-y-3">
-                            <div className="flex justify-between items-end px-1">
-                                <h2 className="text-sm font-bold text-gray-300">Items ({items.length})</h2>
-                                {totals.unassigned > 0 ? (
-                                    <span className="text-xs text-red-400 bg-red-500/10 px-2 py-0.5 rounded">Falta asignar: ${totals.unassigned.toFixed(2)}</span>
-                                ) : (
-                                    <span className="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">¡Todo listo!</span>
-                                )}
-                            </div>
-
-                            {items.map(item => {
-                                const isAssigned = item.assignedTo.length > 0;
-                                return (
-                                    <div
-                                        key={item.id}
-                                        onClick={() => setModalItem(item)}
-                                        className={`p-4 rounded-xl border cursor-pointer transition-all flex justify-between items-center ${isAssigned
-                                                ? 'bg-indigo-500/10 border-indigo-500/30'
-                                                : 'bg-white/5 border-white/5 hover:bg-white/10'
-                                            }`}
-                                    >
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className={`text-sm font-medium ${isAssigned ? 'text-indigo-200' : 'text-gray-300'}`}>{item.name}</span>
-                                                {isAssigned && <Icons.Check />}
-                                            </div>
-                                            <p className="text-xs text-gray-500 mt-1 truncate">
-                                                {isAssigned
-                                                    ? item.assignedTo.map(pid => people.find(p => p.id === pid)?.name).join(', ')
-                                                    : 'Toca para asignar'}
-                                            </p>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-sm font-bold text-gray-200">${item.price.toFixed(2)}</div>
-                                            {isAssigned && item.assignedTo.length > 1 && (
-                                                <div className="text-[10px] text-indigo-300">(${(item.price / item.assignedTo.length).toFixed(2)} c/u)</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </section>
-
-                        {/* Floating Summary Button */}
-                        {totals.unassigned === 0 && items.length > 0 && (
-                            <div className="fixed bottom-6 left-0 right-0 px-4 flex justify-center">
-                                <button
-                                    onClick={() => setStep('summary')}
-                                    className="bg-emerald-500 hover:bg-emerald-400 text-white font-bold py-3 px-8 rounded-full shadow-lg shadow-emerald-500/20 transform hover:scale-105 transition-all"
-                                >
-                                    Ver Cuentas Finales →
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* --- PASO 3: RESUMEN --- */}
-                {step === 'summary' && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                        <div className="bg-indigo-600 rounded-2xl p-6 text-center shadow-lg shadow-indigo-500/20">
-                            <p className="text-indigo-200 text-xs uppercase tracking-wider mb-1">Total de la Cuenta</p>
-                            <h2 className="text-4xl font-black text-white">${totals.totalBill.toFixed(2)}</h2>
-                        </div>
-
-                        <div className="space-y-3">
-                            {people.map(p => {
-                                const amount = totals.map.get(p.id) || 0;
-                                if (amount === 0) return null;
-                                return (
-                                    <div key={p.id} className="bg-white/5 p-4 rounded-xl border border-white/5 flex justify-between items-center">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-gray-700 to-gray-600 flex items-center justify-center text-xs font-bold text-white">
-                                                {p.name.charAt(0)}
-                                            </div>
-                                            <span className="font-medium text-gray-200">{p.name}</span>
-                                        </div>
-                                        <span className="font-bold text-lg text-white">${amount.toFixed(2)}</span>
-                                    </div>
-                                )
-                            })}
-                        </div>
-
+                    <div className="mb-8 p-4 bg-red-900/20 border-2 border-red-500 rounded-xl text-red-100 animate-pulse">
+                        <h3 className="font-bold text-red-400 mb-1">⚠️ ERROR DEL SERVIDOR:</h3>
+                        <p className="font-mono text-xs break-words">{error}</p>
                         <button
-                            onClick={() => {
-                                if (confirm("¿Seguro que quieres borrar todo?")) {
-                                    setItems([]);
-                                    setStep('upload');
-                                }
-                            }}
-                            className="w-full py-4 text-xs text-gray-500 hover:text-red-400 transition-colors"
+                            onClick={() => setError(null)}
+                            className="mt-3 text-xs bg-red-500/20 px-3 py-1 rounded hover:bg-red-500/40"
                         >
-                            Comenzar nueva cuenta
+                            Cerrar
                         </button>
                     </div>
                 )}
 
-                {/* MODAL */}
+                {/* --- PANTALLA DE CARGA --- */}
+                {!isLoading && items.length === 0 && (
+                    <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-8">
+                        <label className="group relative cursor-pointer">
+                            <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+
+                            {/* CIRCULO CENTRAL */}
+                            <div className="w-48 h-48 bg-gray-800 rounded-full flex flex-col items-center justify-center border-2 border-dashed border-gray-600 group-hover:border-purple-500 transition-all">
+                                {/* ICONO CON TAMAÑO FORZADO */}
+                                <Icons.Scan />
+                                <span className="text-sm font-medium text-gray-400 mt-2">Toca para Escanear</span>
+                            </div>
+                        </label>
+                        <p className="text-xs text-gray-500 text-center">
+                            Modo Debug: Los errores se mostrarán arriba en rojo.
+                        </p>
+                    </div>
+                )}
+
+                {/* --- LOADING --- */}
+                {isLoading && (
+                    <div className="flex flex-col items-center justify-center min-h-[50vh]">
+                        <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+                        <p className="text-purple-400 text-sm font-mono">Conectando con Google...</p>
+                    </div>
+                )}
+
+                {/* --- RESULTADOS --- */}
+                {!isLoading && items.length > 0 && (
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-end border-b border-white/10 pb-2">
+                            <span className="text-gray-400">Total</span>
+                            <span className="text-2xl font-bold">${totals.toFixed(2)}</span>
+                        </div>
+
+                        {items.map(item => (
+                            <div key={item.id} onClick={() => setModalItem(item)} className="p-3 bg-white/5 rounded-lg flex justify-between cursor-pointer hover:bg-white/10">
+                                <span>{item.name}</span>
+                                <span className="font-bold">${item.price.toFixed(2)}</span>
+                            </div>
+                        ))}
+
+                        <button
+                            onClick={() => setItems([])}
+                            className="w-full py-3 bg-red-500/10 text-red-400 rounded-lg mt-8 text-sm"
+                        >
+                            Reiniciar Debug
+                        </button>
+                    </div>
+                )}
+
                 <ItemAssignmentModal
                     item={modalItem}
                     people={people}
