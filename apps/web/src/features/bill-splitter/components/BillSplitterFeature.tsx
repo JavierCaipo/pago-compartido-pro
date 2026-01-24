@@ -271,8 +271,8 @@ export default function BillSplitterFeature() {
                                             key={item.id}
                                             onClick={() => setModalItem(item)}
                                             className={`p-4 rounded-xl border cursor-pointer transition-all relative overflow-hidden group ${isAssigned
-                                                    ? 'bg-indigo-500/10 border-indigo-500/40'
-                                                    : 'bg-white/5 border-white/5 hover:bg-white/10'
+                                                ? 'bg-indigo-500/10 border-indigo-500/40'
+                                                : 'bg-white/5 border-white/5 hover:bg-white/10'
                                                 }`}
                                         >
                                             <div className="flex justify-between items-start relative z-10">
@@ -312,8 +312,8 @@ export default function BillSplitterFeature() {
                             <button
                                 onClick={() => setStep('summary')}
                                 className={`w-full py-4 rounded-xl font-bold shadow-lg transition-all transform active:scale-95 ${totals.unassigned < 0.1
-                                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/20'
-                                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20'
+                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/20'
+                                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20'
                                     }`}
                             >
                                 {totals.unassigned < 0.1 ? 'Ver Cuentas Finales →' : 'Ver Resumen Parcial'}
