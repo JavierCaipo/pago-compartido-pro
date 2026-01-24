@@ -7,83 +7,83 @@ type ActionResponse =
     | { success: true; data: RawItem[] }
     | { success: false; error: string };
 
+// Lista de modelos a probar en orden de preferencia
+const MODELS_TO_TRY = [
+    "gemini-2.0-flash-exp",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
+    "gemini-1.5-flash-8b"
+];
+
 export async function analyzeReceiptAction(formData: FormData): Promise<ActionResponse> {
-    console.log("🔹 [Server] v4.0 FIX: Iniciando análisis con modelo específico...");
+    console.log("🔹 [Server] v5.0 MODEL HUNTER: Iniciando...");
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        return { success: false, error: "CONFIG_ERROR: API Key no configurada." };
+    }
+
+    const file = formData.get('file') as File;
+    if (!file) {
+        return { success: false, error: "UPLOAD_ERROR: No se recibió archivo." };
+    }
 
     try {
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            console.error("❌ [Server] FATAL: GEMINI_API_KEY no encontrada.");
-            return { success: false, error: "CONFIG_ERROR: API Key no configurada." };
-        }
-
-        const file = formData.get('file') as File;
-        if (!file) {
-            return { success: false, error: "UPLOAD_ERROR: No se recibió archivo." };
-        }
-
-        // Conversión a Base64
         const arrayBuffer = await file.arrayBuffer();
         const base64Data = Buffer.from(arrayBuffer).toString('base64');
-
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        // --- CAMBIO CLAVE: Usamos la versión PINEADA (001) ---
-        // Si gemini-1.5-flash falla, usamos gemini-1.5-flash-001 que es la versión estable específica
-        const modelName = "gemini-1.5-flash-001";
-        const model = genAI.getGenerativeModel({ model: modelName });
+        // Iteramos por los modelos hasta que uno funcione
+        for (const modelName of MODELS_TO_TRY) {
+            console.log(`🔹 [Server] Intentando con modelo: ${modelName}...`);
 
-        console.log(`🔹 [Server] Usando modelo: ${modelName}`);
+            try {
+                const model = genAI.getGenerativeModel({ model: modelName });
 
-        const prompt = `Analiza este recibo/factura.
-    Extrae items y precios.
-    IMPORTANTE: Devuelve SOLO un JSON válido.
-    Formato: [{"name": "Producto", "price": 10.00}]
-    Ignora totales.`;
+                const prompt = `Analiza este recibo.
+        Extrae items y precios en un JSON Array.
+        Formato: [{"name": "Item", "price": 10.0}]
+        Ignora totales.`;
 
-        const result = await model.generateContent([
-            prompt,
-            {
-                inlineData: {
-                    data: base64Data,
-                    mimeType: file.type || "image/jpeg",
-                },
-            },
-        ]);
+                const result = await model.generateContent([
+                    prompt,
+                    { inlineData: { data: base64Data, mimeType: file.type || "image/jpeg" } },
+                ]);
 
-        const response = await result.response;
-        let text = response.text();
-        console.log("🔹 [Server] Respuesta recibida:", text.substring(0, 50) + "...");
+                const response = await result.response;
+                let text = response.text();
 
-        // Limpieza JSON
-        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                // Si llegamos aquí, ¡FUNCIONÓ! Procesamos y salimos.
+                console.log(`✅ [Server] ¡ÉXITO con ${modelName}!`);
 
-        let parsed;
-        try {
-            parsed = JSON.parse(text);
-        } catch (e) {
-            return { success: false, error: "AI_ERROR: La IA no devolvió un JSON válido." };
+                text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                const parsed = JSON.parse(text);
+
+                if (!Array.isArray(parsed)) throw new Error("No es un array");
+
+                const cleanData = parsed.map((item: any) => ({
+                    name: item.name || "Item",
+                    price: Number(item.price) || 0
+                }));
+
+                return { success: true, data: cleanData };
+
+            } catch (innerError: any) {
+                // Si es un error 404 (modelo no encontrado), probamos el siguiente
+                if (innerError.message?.includes("404") || innerError.message?.includes("not found")) {
+                    console.warn(`⚠️ [Server] ${modelName} no disponible. Probando siguiente...`);
+                    continue;
+                }
+                // Si es otro error (ej: JSON malformado), lanzamos
+                throw innerError;
+            }
         }
 
-        if (!Array.isArray(parsed)) {
-            return { success: false, error: "AI_ERROR: La respuesta no es una lista." };
-        }
-
-        const cleanData = parsed.map((item: any) => ({
-            name: item.name || "Item",
-            price: Number(item.price) || 0
-        }));
-
-        return { success: true, data: cleanData };
+        // Si termina el bucle y ninguno funcionó
+        return { success: false, error: "ALL_MODELS_FAILED: Ningún modelo de Gemini está disponible en tu API Key." };
 
     } catch (error: any) {
         console.error("🔥 [Server CRASH]:", error);
-
-        // Si falla el modelo Flash, devolvemos un error descriptivo
-        if (error.message?.includes("404") || error.message?.includes("not found")) {
-            return { success: false, error: "MODEL_ERROR: El modelo 'gemini-1.5-flash-001' no está disponible en tu API Key. Verifica Google AI Studio." };
-        }
-
         return { success: false, error: `GOOGLE_ERROR: ${error.message}` };
     }
 }
