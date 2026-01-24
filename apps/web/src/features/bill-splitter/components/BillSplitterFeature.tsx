@@ -4,34 +4,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Item, Person } from '../types';
 import { analyzeReceiptAction } from '../actions/analyze-receipt';
 import ItemAssignmentModal from './ItemAssignmentModal';
+import { Scan, Users, Check, Plus, ArrowRight, Receipt, AlertCircle, Loader2 } from 'lucide-react';
 
-// --- ICONOS SEGUROS (Con estilos inline para evitar bugs visuales) ---
-const Icons = {
-    Scan: () => (
-        <svg
-            style={{ width: '64px', height: '64px', display: 'block', margin: '0 auto', color: 'white' }}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor"
-        >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H3a2 2 0 01-2-2V9z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-    ),
-    Users: () => (
-        <svg style={{ width: '20px', height: '20px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
-    ),
-    Check: () => (
-        <svg style={{ width: '20px', height: '20px' }} className="text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-        </svg>
-    ),
-    Plus: () => (
-        <svg style={{ width: '16px', height: '16px' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-        </svg>
-    )
-};
+// --- COMPONENTS ---
+
+const BackgroundBlobs = () => (
+    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute -top-[10%] -left-[10%] w-[70vw] h-[70vw] rounded-full bg-indigo-600/10 blur-[100px] mix-blend-screen"></div>
+        <div className="absolute top-[40%] -right-[10%] w-[80vw] h-[80vw] rounded-full bg-purple-900/20 blur-[120px] mix-blend-screen opacity-40"></div>
+    </div>
+);
 
 export default function BillSplitterFeature() {
     const [isMounted, setIsMounted] = useState(false);
@@ -61,13 +43,12 @@ export default function BillSplitterFeature() {
             const formData = new FormData();
             formData.append('file', file);
 
-            // Llamamos al Server Action (Versión Model Hunter)
+            // Llamamos al Server Action
             const result = await analyzeReceiptAction(formData);
 
-            // Verificamos si hubo éxito o error
             if (!result.success) {
-                // Corrección de TypeScript aplicada aquí
-                throw new Error((result as any).error);
+                // @ts-ignore - Error handling legacy
+                throw new Error(result.error);
             }
 
             const rawItems = result.data;
@@ -81,7 +62,7 @@ export default function BillSplitterFeature() {
                 assignedTo: [] // Al inicio nadie tiene asignado nada
             })));
 
-            setStep('assign'); // Pasamos al paso 2
+            setStep('assign');
 
         } catch (err: any) {
             console.error(err);
@@ -111,7 +92,7 @@ export default function BillSplitterFeature() {
         })));
     };
 
-    // Cálculo de Totales (La magia matemática)
+    // Cálculo de Totales
     const totals = useMemo(() => {
         const map = new Map<number, number>();
         people.forEach(p => map.set(p.id, 0));
@@ -125,7 +106,6 @@ export default function BillSplitterFeature() {
             if (item.assignedTo.length === 0) {
                 unassigned += item.price;
             } else {
-                // DIVISIÓN: Si un plato cuesta $20 y son 2 personas, son $10 c/u
                 const splitPrice = item.price / item.assignedTo.length;
                 item.assignedTo.forEach(pid => {
                     map.set(pid, (map.get(pid) || 0) + splitPrice);
@@ -136,72 +116,92 @@ export default function BillSplitterFeature() {
         return { map, totalBill, unassigned };
     }, [items, people]);
 
-    if (!isMounted) return <div className="min-h-screen bg-[#0a0a0a]" />;
+    if (!isMounted) return <div className="min-h-screen bg-black" />;
 
     return (
-        <div className="min-h-screen bg-[#0a0a0a] text-gray-100 font-sans pb-32">
+        <div className="relative min-h-screen bg-black text-white font-sans pb-32 overflow-hidden selection:bg-indigo-500/30">
+            <BackgroundBlobs />
 
             {/* HEADER */}
-            <header className="p-4 border-b border-white/5 bg-[#0a0a0a]/90 backdrop-blur sticky top-0 z-20 flex justify-between items-center">
-                <h1 className="font-bold text-lg bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-                    Pago Compartido
-                </h1>
+            <header className="fixed top-0 left-0 right-0 z-30 p-4 border-b border-white/5 bg-black/80 backdrop-blur-xl flex justify-between items-center transition-all duration-300">
+                <div className="flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-indigo-500" />
+                    <h1 className="font-bold text-lg text-white tracking-tight">
+                        SplitPay
+                    </h1>
+                </div>
                 {step !== 'upload' && (
-                    <div className="flex bg-white/5 rounded-lg p-1">
+                    <nav className="flex bg-white/5 rounded-full p-1 backdrop-blur-md border border-white/5">
                         <button
                             onClick={() => setStep('assign')}
-                            className={`text-xs px-3 py-1 rounded-md transition-all ${step === 'assign' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                            className={`text-xs px-4 py-1.5 rounded-full transition-all duration-300 ${step === 'assign' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25 font-medium' : 'text-gray-400 hover:text-white'}`}
                         >
                             Asignar
                         </button>
                         <button
                             onClick={() => setStep('summary')}
-                            className={`text-xs px-3 py-1 rounded-md transition-all ${step === 'summary' ? 'bg-indigo-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                            className={`text-xs px-4 py-1.5 rounded-full transition-all duration-300 ${step === 'summary' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25 font-medium' : 'text-gray-400 hover:text-white'}`}
                         >
                             Resumen
                         </button>
-                    </div>
+                    </nav>
                 )}
             </header>
 
-            <main className="max-w-md mx-auto px-4 py-6">
+            <main className="relative z-10 max-w-md mx-auto px-4 pt-24">
 
                 {/* ERROR DISPLAY */}
                 {error && (
-                    <div className="mb-6 p-4 bg-red-900/20 border border-red-500/50 rounded-xl flex justify-between items-start animate-in slide-in-from-top-2">
-                        <div>
-                            <h3 className="text-red-400 font-bold text-sm mb-1">Error</h3>
-                            <p className="text-red-200 text-xs">{error}</p>
+                    <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex gap-3 items-start animate-in slide-in-from-top-2 backdrop-blur-md">
+                        <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <h3 className="text-red-400 font-bold text-sm mb-1">Error al procesar</h3>
+                            <p className="text-red-200/80 text-xs leading-relaxed">{error}</p>
                         </div>
-                        <button onClick={() => setError(null)} className="text-red-400 font-bold ml-4">✕</button>
+                        <button onClick={() => setError(null)} className="text-red-400/50 hover:text-red-400 transition-colors">✕</button>
                     </div>
                 )}
 
                 {/* --- PASO 1: UPLOAD --- */}
                 {step === 'upload' && (
-                    <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-8">
+                    <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-8 animate-in fade-in duration-500">
                         {isLoading ? (
-                            <div className="text-center space-y-4">
-                                <div className="w-16 h-16 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mx-auto"></div>
-                                <p className="text-indigo-300 animate-pulse text-sm font-medium">Leyendo factura...</p>
-                                <p className="text-xs text-gray-500">Probando modelos de IA...</p>
+                            <div className="flex flex-col items-center gap-6">
+                                <div className="relative">
+                                    <div className="w-20 h-20 rounded-full border-2 border-indigo-500/20 border-t-indigo-500 animate-spin"></div>
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <Loader2 className="w-8 h-8 text-indigo-500 animate-pulse" />
+                                    </div>
+                                </div>
+                                <div className="text-center space-y-1">
+                                    <p className="text-white font-medium text-lg">Analizando Recibo...</p>
+                                    <p className="text-gray-500 text-sm">Nuestra IA está leyendo los precios</p>
+                                </div>
                             </div>
                         ) : (
                             <>
-                                <div className="relative group">
+                                <div className="relative group cursor-pointer">
                                     <label className="block cursor-pointer">
                                         <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                                        <div className="w-48 h-48 bg-gradient-to-br from-gray-800 to-gray-900 rounded-full flex flex-col items-center justify-center border-2 border-dashed border-white/10 group-hover:border-indigo-500/50 group-hover:scale-105 transition-all shadow-2xl">
-                                            <Icons.Scan />
-                                            <span className="text-xs text-gray-300 mt-4 font-medium px-4 py-2 bg-white/5 rounded-full">Escanear Recibo</span>
+                                        <div className="w-56 h-56 bg-gradient-to-b from-[#1a1a1a] to-black rounded-full flex flex-col items-center justify-center border border-white/10 group-hover:border-indigo-500/50 group-hover:scale-105 transition-all duration-500 shadow-2xl relative z-10 overflow-hidden">
+                                            <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                            <Scan className="w-16 h-16 text-white group-hover:text-indigo-400 transition-colors duration-300" strokeWidth={1.5} />
+                                            <span className="text-sm text-gray-400 mt-4 font-medium px-4 py-2 bg-white/5 rounded-full backdrop-blur-sm group-hover:bg-indigo-500/10 group-hover:text-indigo-300 transition-all">
+                                                Escanear Recibo
+                                            </span>
                                         </div>
                                     </label>
-                                    {/* Efecto Glow */}
-                                    <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-3xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                    {/* Glow Effect */}
+                                    <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-[60px] -z-10 opacity-50 group-hover:opacity-100 group-hover:blur-[80px] transition-all duration-700"></div>
                                 </div>
-                                <p className="text-gray-500 text-xs text-center max-w-[200px]">
-                                    Sube una foto. Nosotros detectamos los precios y tú divides la cuenta.
-                                </p>
+                                <div className="text-center space-y-2 max-w-[250px]">
+                                    <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-white to-gray-500">
+                                        Divide la cuenta
+                                    </h2>
+                                    <p className="text-gray-500 text-xs leading-relaxed">
+                                        Sube una foto de tu factura y deja que la magia ocurra. Detectamos items y precios automáticamente.
+                                    </p>
+                                </div>
                             </>
                         )}
                     </div>
@@ -209,34 +209,59 @@ export default function BillSplitterFeature() {
 
                 {/* --- PASO 2: ASIGNAR --- */}
                 {step === 'assign' && (
-                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+                    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-500">
+
+                        {/* HERO TOTAL CARD */}
+                        <div className="relative overflow-hidden rounded-3xl bg-[#1A1A1A] border border-white/5 p-6 text-center shadow-2xl">
+                            <div className="absolute top-0 right-0 w-40 h-40 bg-indigo-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+
+                            <p className="text-gray-500 text-xs font-semibold uppercase tracking-wider mb-2">Total Detectado</p>
+                            <h2 className="text-5xl font-bold text-white tracking-tighter mb-4">
+                                ${totals.totalBill.toFixed(2)}
+                            </h2>
+
+                            {totals.unassigned > 0.01 ? (
+                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></div>
+                                    <span className="text-xs font-medium text-red-400">Falta asignar: ${totals.unassigned.toFixed(2)}</span>
+                                </div>
+                            ) : (
+                                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                                    <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                    <span className="text-xs font-medium text-emerald-400">Cuenta cuadrada</span>
+                                </div>
+                            )}
+                        </div>
 
                         {/* SECCIÓN PERSONAS */}
-                        <section className="bg-white/5 rounded-2xl p-4 border border-white/5">
-                            <div className="flex justify-between items-center mb-4">
-                                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
-                                    <Icons.Users /> Personas
+                        <section>
+                            <div className="flex justify-between items-center mb-4 px-2">
+                                <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                                    <Users className="w-4 h-4" /> Personas ({people.length})
                                 </h2>
                                 <button
                                     onClick={addPerson}
-                                    className="text-xs bg-indigo-600/80 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-full transition-colors flex items-center gap-1"
+                                    className="text-xs bg-[#222] hover:bg-[#333] border border-white/10 text-white px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 active:scale-95"
                                 >
-                                    <Icons.Plus /> Agregar
+                                    <Plus className="w-3.5 h-3.5" /> Agregar
                                 </button>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-2 gap-3">
                                 {people.map(p => (
                                     <div key={p.id} className="relative group">
+                                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
                                         <input
                                             value={p.name}
                                             onChange={(e) => updatePersonName(p.id, e.target.value)}
-                                            className="w-full bg-black/40 text-white text-sm px-3 py-2 rounded-lg border border-white/5 focus:border-indigo-500 focus:outline-none transition-all text-center"
+                                            className="relative w-full bg-[#111] text-white text-sm px-4 py-3 rounded-xl border border-white/5 focus:border-indigo-500 focus:outline-none transition-all text-center focus:bg-[#151515] placeholder-gray-700"
+                                            placeholder="Nombre"
                                         />
                                         {people.length > 1 && (
                                             <button
                                                 onClick={() => removePerson(p.id)}
-                                                className="absolute -top-1 -right-1 bg-red-500 text-white w-4 h-4 rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                                                className="absolute -top-1.5 -right-1.5 bg-red-500/80 hover:bg-red-500 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg scale-75 group-hover:scale-100"
+                                                tabIndex={-1}
                                             >
                                                 ✕
                                             </button>
@@ -247,136 +272,153 @@ export default function BillSplitterFeature() {
                         </section>
 
                         {/* SECCIÓN ITEMS */}
-                        <section className="space-y-3">
-                            <div className="flex justify-between items-end px-1 pb-2 border-b border-white/5">
-                                <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                                    Items Detectados ({items.length})
-                                </h2>
-                                {totals.unassigned > 0.01 ? (
-                                    <span className="text-[10px] font-bold text-red-300 bg-red-500/10 px-2 py-1 rounded-full border border-red-500/20">
-                                        Falta asignar: ${totals.unassigned.toFixed(2)}
-                                    </span>
-                                ) : (
-                                    <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20">
-                                        ¡Todo Asignado!
-                                    </span>
-                                )}
-                            </div>
+                        <section className="space-y-4">
+                            <h2 className="text-xs font-bold text-gray-500 uppercase tracking-wider px-2">
+                                Items ({items.length})
+                            </h2>
 
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                                 {items.map(item => {
                                     const isAssigned = item.assignedTo.length > 0;
                                     return (
                                         <div
                                             key={item.id}
                                             onClick={() => setModalItem(item)}
-                                            className={`p-4 rounded-xl border cursor-pointer transition-all relative overflow-hidden group ${isAssigned
-                                                ? 'bg-indigo-500/10 border-indigo-500/40'
-                                                : 'bg-white/5 border-white/5 hover:bg-white/10'
+                                            className={`relative group p-4 rounded-2xl border cursor-pointer transition-all duration-300 overflow-hidden active:scale-[0.99] ${isAssigned
+                                                ? 'bg-[#111] border-indigo-500/30'
+                                                : 'bg-[#111] border-white/5 hover:border-white/10'
                                                 }`}
                                         >
-                                            <div className="flex justify-between items-start relative z-10">
+                                            {/* Selection Indicator Line */}
+                                            {isAssigned && (
+                                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-indigo-500 to-purple-500"></div>
+                                            )}
+
+                                            <div className="flex justify-between items-start pl-2">
                                                 <div className="flex-1 mr-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`text-sm font-medium ${isAssigned ? 'text-indigo-200' : 'text-gray-300'}`}>{item.name}</span>
-                                                        {isAssigned && <Icons.Check />}
+                                                    <div className="flex items-start justify-between">
+                                                        <span className={`text-base font-medium leading-snug ${isAssigned ? 'text-white' : 'text-gray-300'}`}>
+                                                            {item.name}
+                                                        </span>
                                                     </div>
-                                                    <p className="text-xs text-gray-500 mt-1 truncate">
-                                                        {isAssigned
-                                                            ? item.assignedTo.map(pid => people.find(p => p.id === pid)?.name).join(', ')
-                                                            : 'Toca para asignar a alguien...'}
-                                                    </p>
+                                                    <div className="mt-1.5 flex flex-wrap gap-1">
+                                                        {isAssigned ? (
+                                                            item.assignedTo.map(pid => {
+                                                                const person = people.find(p => p.id === pid);
+                                                                return person ? (
+                                                                    <span key={pid} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-white/5 text-gray-400 border border-white/5">
+                                                                        {person.name}
+                                                                    </span>
+                                                                ) : null;
+                                                            })
+                                                        ) : (
+                                                            <span className="text-xs text-gray-600 italic flex items-center gap-1">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-gray-700"></span> Sin asignar
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <div className="text-right">
-                                                    <div className="text-sm font-bold text-white">${item.price.toFixed(2)}</div>
+
+                                                <div className="text-right shrink-0">
+                                                    <div className={`text-lg font-bold tracking-tight ${isAssigned ? 'text-[#9d25f4]' : 'text-gray-500'}`}>
+                                                        ${item.price.toFixed(2)}
+                                                    </div>
                                                     {isAssigned && item.assignedTo.length > 1 && (
-                                                        <div className="text-[10px] text-indigo-300 font-mono mt-1">
+                                                        <div className="text-[10px] text-gray-500 font-mono mt-0.5">
                                                             ${(item.price / item.assignedTo.length).toFixed(2)} c/u
                                                         </div>
                                                     )}
                                                 </div>
                                             </div>
-
-                                            {/* Barra de progreso visual si está asignado */}
-                                            {isAssigned && (
-                                                <div className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-500"></div>
-                                            )}
                                         </div>
                                     );
                                 })}
                             </div>
                         </section>
 
-                        {/* Botón Flotante para ir al Resumen (solo si todo está asignado o casi) */}
-                        <div className="sticky bottom-4 pt-4 bg-gradient-to-t from-[#0a0a0a] to-transparent">
+                        {/* Botón Flotante */}
+                        <div className="fixed bottom-6 left-0 right-0 px-4 flex justify-center z-20 pointer-events-none">
                             <button
                                 onClick={() => setStep('summary')}
-                                className={`w-full py-4 rounded-xl font-bold shadow-lg transition-all transform active:scale-95 ${totals.unassigned < 0.1
-                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/20'
-                                    : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20'
+                                className={`pointer-events-auto w-full max-w-sm py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-2xl shadow-black/50 transition-all transform active:scale-95 hover:shadow-lg ${totals.unassigned < 0.1
+                                    ? 'bg-gradient-to-r from-emerald-500 to-emerald-700 text-white shadow-emerald-900/40'
+                                    : 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-indigo-900/40'
                                     }`}
                             >
-                                {totals.unassigned < 0.1 ? 'Ver Cuentas Finales →' : 'Ver Resumen Parcial'}
+                                {totals.unassigned < 0.1 ? (
+                                    <>Ver Cuentas Finales <ArrowRight className="w-5 h-5" /></>
+                                ) : (
+                                    <>Ver Resumen Parcial ({((1 - (totals.unassigned / totals.totalBill)) * 100).toFixed(0)}%)</>
+                                )}
                             </button>
                         </div>
+                        <div className="h-16"></div> {/* Spacer for fixed button */}
                     </div>
                 )}
 
                 {/* --- PASO 3: RESUMEN FINAL --- */}
                 {step === 'summary' && (
-                    <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
+                    <div className="space-y-8 animate-in fade-in slide-in-from-right-8 duration-500">
 
                         {/* Tarjeta Total */}
-                        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-3xl p-8 text-center shadow-2xl shadow-indigo-500/20 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-                            <p className="text-indigo-100 text-xs uppercase tracking-widest font-medium mb-2">Total de la Cuenta</p>
-                            <h2 className="text-5xl font-black text-white tracking-tight">${totals.totalBill.toFixed(2)}</h2>
+                        <div className="bg-gradient-to-br from-[#1A1A1A] to-[#111] border border-white/5 rounded-3xl p-8 text-center shadow-2xl relative overflow-hidden">
+                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-48 bg-indigo-500/10 rounded-full blur-[80px] pointer-events-none"></div>
+                            <p className="text-gray-500 text-xs uppercase tracking-widest font-medium mb-3 relative z-10">Total de la Cuenta</p>
+                            <h2 className="text-5xl font-black text-white tracking-tighter relative z-10">
+                                ${totals.totalBill.toFixed(2)}
+                            </h2>
                         </div>
 
                         {/* Lista de Deudores */}
-                        <div className="space-y-3">
-                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-2">Desglose por Persona</h3>
+                        <div className="space-y-4">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider px-2">Desglose por Persona</h3>
                             {people.map(p => {
                                 const amount = totals.map.get(p.id) || 0;
                                 if (amount === 0) return null;
 
                                 return (
-                                    <div key={p.id} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex justify-between items-center hover:bg-white/10 transition-colors">
+                                    <div key={p.id} className="bg-[#111] p-5 rounded-2xl border border-white/5 flex justify-between items-center group hover:border-white/10 transition-colors">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-gray-700 to-gray-600 flex items-center justify-center text-sm font-bold text-white shadow-inner">
+                                            <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-gray-800 to-gray-700 flex items-center justify-center text-lg font-bold text-white shadow-inner border border-white/5">
                                                 {p.name.charAt(0)}
                                             </div>
                                             <div>
-                                                <span className="block font-bold text-gray-200">{p.name}</span>
-                                                <span className="text-[10px] text-gray-500">Debe pagar</span>
+                                                <span className="block font-bold text-lg text-gray-200">{p.name}</span>
+                                                <span className="text-xs text-gray-500">Le corresponde</span>
                                             </div>
                                         </div>
-                                        <span className="font-bold text-xl text-emerald-400 font-mono">${amount.toFixed(2)}</span>
+                                        <span className="font-bold text-2xl text-emerald-400 tracking-tight font-mono">
+                                            ${amount.toFixed(2)}
+                                        </span>
                                     </div>
                                 )
                             })}
 
                             {totals.unassigned > 0.01 && (
-                                <div className="p-4 rounded-xl border border-red-500/30 bg-red-500/5 text-center">
-                                    <p className="text-red-300 text-sm">
-                                        Quedan <strong>${totals.unassigned.toFixed(2)}</strong> sin asignar.
+                                <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/5 text-center backdrop-blur-sm">
+                                    <p className="text-red-300 text-sm font-medium">
+                                        Faltan <strong>${totals.unassigned.toFixed(2)}</strong> por asignar.
                                     </p>
-                                    <button onClick={() => setStep('assign')} className="text-xs text-red-400 underline mt-1">Volver y asignar</button>
+                                    <button onClick={() => setStep('assign')} className="text-xs text-red-400 hover:text-red-300 underline mt-2 font-medium">
+                                        Volver y corregir
+                                    </button>
                                 </div>
                             )}
                         </div>
 
-                        <button
-                            onClick={() => {
-                                if (confirm("¿Seguro que quieres borrar todo y empezar de nuevo?")) {
-                                    setItems([]);
-                                    setStep('upload');
-                                }
-                            }}
-                            className="w-full py-4 text-xs text-gray-500 hover:text-red-400 transition-colors mt-8"
-                        >
-                            Comenzar nueva cuenta (Borrar datos)
-                        </button>
+                        <div className="pt-8 pb-4">
+                            <button
+                                onClick={() => {
+                                    if (confirm("¿Seguro que quieres borrar todo y empezar de nuevo?")) {
+                                        setItems([]);
+                                        setStep('upload');
+                                    }
+                                }}
+                                className="w-full text-center text-xs text-gray-600 hover:text-white transition-colors py-2"
+                            >
+                                ¿Nueva cuenta? Borrar datos
+                            </button>
+                        </div>
                     </div>
                 )}
 
