@@ -1,89 +1,153 @@
 'use server';
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { RawItem } from "../types";
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-type ActionResponse =
-    | { success: true; data: RawItem[] }
-    | { success: false; error: string };
+const CLEANUP_REGEX = /```json\s*([\s\S]*?)\s*```/;
 
-// Lista de modelos a probar en orden de preferencia
-const MODELS_TO_TRY = [
-    "gemini-2.0-flash-exp",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash-8b"
-];
-
-export async function analyzeReceiptAction(formData: FormData): Promise<ActionResponse> {
-    console.log("🔹 [Server] v5.0 MODEL HUNTER: Iniciando...");
-
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-        return { success: false, error: "CONFIG_ERROR: API Key no configurada." };
-    }
+export async function analyzeReceiptAction(formData: FormData) {
+    console.log("🚀 Iniciando análisis inteligente de recibo...");
 
     const file = formData.get('file') as File;
+    const apiKey = process.env.GEMINI_API_KEY;
+
+    if (!apiKey) {
+        console.error("❌ Error: No API Key");
+        return { success: false, error: 'Configuración del servidor incompleta (Falta API Key).' };
+    }
+
     if (!file) {
-        return { success: false, error: "UPLOAD_ERROR: No se recibió archivo." };
+        return { success: false, error: 'No se recibió ninguna imagen.' };
     }
 
     try {
+        // 1. Prepara la imagen
         const arrayBuffer = await file.arrayBuffer();
         const base64Data = Buffer.from(arrayBuffer).toString('base64');
+
+        // 2. Inicializa el cliente del SDK (para generar contenido luego)
         const genAI = new GoogleGenerativeAI(apiKey);
 
-        // Iteramos por los modelos hasta que uno funcione
-        for (const modelName of MODELS_TO_TRY) {
-            console.log(`🔹 [Server] Intentando con modelo: ${modelName}...`);
+        // --- ESTRATEGIA DE DESCUBRIMIENTO DINÁMICO (CORREGIDA) ---
+        console.log("🔍 Consultando modelos disponibles a Google API...");
 
-            try {
-                const model = genAI.getGenerativeModel({ model: modelName });
+        // FIX: Usamos fetch directo porque listModels() no siempre está expuesto en el cliente
+        const listResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
 
-                const prompt = `Analiza este recibo.
-        Extrae items y precios en un JSON Array.
-        Formato: [{"name": "Item", "price": 10.0}]
-        Ignora totales.`;
-
-                const result = await model.generateContent([
-                    prompt,
-                    { inlineData: { data: base64Data, mimeType: file.type || "image/jpeg" } },
-                ]);
-
-                const response = await result.response;
-                let text = response.text();
-
-                // Si llegamos aquí, ¡FUNCIONÓ! Procesamos y salimos.
-                console.log(`✅ [Server] ¡ÉXITO con ${modelName}!`);
-
-                text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-                const parsed = JSON.parse(text);
-
-                if (!Array.isArray(parsed)) throw new Error("No es un array");
-
-                const cleanData = parsed.map((item: any) => ({
-                    name: item.name || "Item",
-                    price: Number(item.price) || 0
-                }));
-
-                return { success: true, data: cleanData };
-
-            } catch (innerError: any) {
-                // Si es un error 404 (modelo no encontrado), probamos el siguiente
-                if (innerError.message?.includes("404") || innerError.message?.includes("not found")) {
-                    console.warn(`⚠️ [Server] ${modelName} no disponible. Probando siguiente...`);
-                    continue;
-                }
-                // Si es otro error (ej: JSON malformado), lanzamos
-                throw innerError;
-            }
+        if (!listResponse.ok) {
+            throw new Error(`No se pudo conectar con Google para listar modelos (Status: ${listResponse.status})`);
         }
 
-        // Si termina el bucle y ninguno funcionó
-        return { success: false, error: "ALL_MODELS_FAILED: Ningún modelo de Gemini está disponible en tu API Key." };
+        const data = await listResponse.json();
+        const allModels = data.models || [];
+
+        // Filtramos solo los que son "Gemini" y sirven para generar contenido
+        // Nota: La API devuelve "generateContent" en supportedGenerationMethods
+        const availableModels = allModels.filter((m: any) =>
+            m.name.includes("gemini") &&
+            m.supportedGenerationMethods &&
+            m.supportedGenerationMethods.includes("generateContent")
+        );
+
+        if (availableModels.length === 0) {
+            throw new Error("Tu API Key es válida, pero Google no devolvió ningún modelo Gemini compatible.");
+        }
+
+        // Algoritmo de Prioridad: 
+        // 1. Preferimos "flash" (rápido y ligero).
+        // 2. Si no hay flash, usamos "pro".
+        // 3. Ordenamos para asegurar consistencia.
+        const selectedModelInfo = availableModels.sort((a: any, b: any) => {
+            const aName = a.name.toLowerCase();
+            const bName = b.name.toLowerCase();
+
+            // Prioridad a Flash
+            const aFlash = aName.includes('flash');
+            const bFlash = bName.includes('flash');
+            if (aFlash && !bFlash) return -1;
+            if (!aFlash && bFlash) return 1;
+
+            // Prioridad a Pro
+            const aPro = aName.includes('pro');
+            const bPro = bName.includes('pro');
+            if (aPro && !bPro) return -1;
+            if (!aPro && bPro) return 1;
+
+            return 0;
+        })[0];
+
+        // IMPORTANTE: La API devuelve "models/gemini-1.5-flash", el SDK a veces necesita solo "gemini-1.5-flash"
+        // o funciona con el nombre completo. Usaremos el nombre completo devuelto por la API.
+        const modelName = selectedModelInfo.name.replace('models/', ''); // Limpiamos el prefijo por si acaso
+
+        console.log(`✅ Modelo seleccionado automáticamente: ${modelName}`);
+
+        // 3. Instancia el modelo ganador
+        const model = genAI.getGenerativeModel({ model: modelName });
+
+        // 4. El Prompt Maestro
+        const prompt = `
+      Actúa como un sistema OCR experto en facturas de restaurantes.
+      Analiza esta imagen y extrae SOLO los items consumibles (comida y bebida).
+      
+      Reglas Estrictas:
+      1. Ignora propinas, impuestos, subtotales o fechas.
+      2. Si hay cantidades (ej: "2x Cerveza"), sepáralos en lineas distintas o pon el precio total.
+      3. Traduce nombres genéricos al español si es necesario.
+      4. DEBES responder EXCLUSIVAMENTE un JSON válido.
+      5. NO añadas texto antes ni después del JSON (nada de \`\`\`json).
+
+      Formato JSON requerido:
+      [
+        { "name": "Nombre del plato", "price": 10.50 },
+        { "name": "Bebida", "price": 5.00 }
+      ]
+    `;
+
+        // 5. Ejecuta la IA
+        const result = await model.generateContent([
+            prompt,
+            {
+                inlineData: {
+                    data: base64Data,
+                    mimeType: file.type || 'image/jpeg',
+                },
+            },
+        ]);
+
+        const response = await result.response;
+        let text = response.text();
+
+        console.log("🤖 Respuesta cruda de IA:", text.substring(0, 50) + "...");
+
+        // 6. Limpieza Quirúrgica del JSON
+        const match = text.match(CLEANUP_REGEX);
+        if (match && match[1]) {
+            text = match[1];
+        }
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
+        // 7. Parseo Seguro
+        const items = JSON.parse(text);
+
+        if (!Array.isArray(items)) {
+            throw new Error("La IA no devolvió una lista de items válida.");
+        }
+
+        return { success: true, data: items };
 
     } catch (error: any) {
-        console.error("🔥 [Server CRASH]:", error);
-        return { success: false, error: `GOOGLE_ERROR: ${error.message}` };
+        console.error("💥 Error en Server Action:", error);
+
+        let userMessage = "No pudimos leer el recibo.";
+        if (error.message.includes("API Key")) userMessage = "Error de configuración (API Key).";
+        if (error.message.includes("JSON")) userMessage = "Error de formato en la respuesta de IA.";
+
+        return {
+            success: false,
+            error: `${userMessage} (Detalle: ${error.message})`
+        };
     }
 }
