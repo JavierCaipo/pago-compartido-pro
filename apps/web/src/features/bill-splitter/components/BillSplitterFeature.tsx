@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import imageCompression from 'browser-image-compression';
 import { Item, Person } from '../types';
-import { analyzeReceiptAction } from '../actions/analyze-receipt';
 import ItemAssignmentModal from './ItemAssignmentModal';
 import ReferralCarousel from './ReferralCarousel';
 import { BannerRow } from '../types';
@@ -19,43 +19,26 @@ const Icons = {
 
 // --- UTILIDAD DE COMPRESIÓN DE IMAGEN ---
 const compressImage = async (file: File): Promise<File> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target?.result as string;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                // Redimensionar si es muy grande (Max 1024px)
-                const MAX_WIDTH = 1024;
-                const scaleSize = MAX_WIDTH / img.width;
-                canvas.width = MAX_WIDTH;
-                canvas.height = img.height * scaleSize;
+    const options = {
+        maxSizeMB: 0.8,
+        maxWidthOrHeight: 1920,
+        useWebWorker: true,
+        initialQuality: 0.75,
+        fileType: 'image/jpeg' as const,
+    };
 
-                const ctx = canvas.getContext('2d');
-                ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                // Comprimir a JPEG calidad 70%
-                canvas.toBlob((blob) => {
-                    if (!blob) return reject(new Error('Error al comprimir imagen'));
-                    resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-                }, 'image/jpeg', 0.7);
-            };
-            img.onerror = (error) => reject(error);
-        };
-        reader.onerror = (error) => reject(error);
-    });
+    const compressedFile = await imageCompression(file, options);
+    return compressedFile instanceof File ? compressedFile : new File([compressedFile], file.name, { type: 'image/jpeg' });
 };
 
 type Brand = {
-    name: string;
+    name?: string;
     logoUrl?: string;
     primaryColor?: string;
     secondaryColor?: string;
 };
 
-export default function BillSplitterFeature({ brand, banners }: { brand: Brand, banners: BannerRow[] }) {
+export default function BillSplitterFeature({ brand, banners }: { brand?: Brand; banners?: BannerRow[] }) {
     const [isMounted, setIsMounted] = useState(false);
     const [step, setStep] = useState<'upload' | 'assign' | 'summary'>('upload');
 
@@ -64,6 +47,8 @@ export default function BillSplitterFeature({ brand, banners }: { brand: Brand, 
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isRateLimitError, setIsRateLimitError] = useState(false);
+    const [storeName, setStoreName] = useState<string | null>(null);
     const [modalItem, setModalItem] = useState<Item | null>(null);
 
     useEffect(() => setIsMounted(true), []);
@@ -74,6 +59,8 @@ export default function BillSplitterFeature({ brand, banners }: { brand: Brand, 
 
         setIsLoading(true);
         setError(null);
+        setIsRateLimitError(false);
+        setStoreName(null);
 
         try {
             // 1. COMPRIMIR IMAGEN (Soluciona error móvil)
@@ -82,13 +69,29 @@ export default function BillSplitterFeature({ brand, banners }: { brand: Brand, 
             const formData = new FormData();
             formData.append('file', compressedFile);
 
-            const result = await analyzeReceiptAction(formData);
+            const response = await fetch('/api/scan', {
+                method: 'POST',
+                body: formData,
+            });
 
-            if (!result.success) throw new Error((result as any).error);
+            const result = await response.json();
+            if (!response.ok) {
+                const message = result?.error || 'Error al leer el recibo.';
+                setIsRateLimitError(response.status === 429);
+                throw new Error(message);
+            }
 
-            const rawItems = result.data;
-            if (!rawItems || rawItems.length === 0) throw new Error("No se encontraron items.");
+            const rawData = result.data;
+            const extractedStoreName = rawData && typeof rawData === 'object' && !Array.isArray(rawData)
+                ? typeof rawData.storeName === 'string' ? rawData.storeName.trim() : null
+                : null;
+            const rawItems = Array.isArray(rawData) ? rawData : rawData?.items;
 
+            if (!Array.isArray(rawItems) || rawItems.length === 0) {
+                throw new Error('No se encontraron items.');
+            }
+
+            setStoreName(extractedStoreName);
             setItems(rawItems.map((item, idx) => ({
                 id: idx, name: item.name, price: item.price, quantity: 1, assignments: []
             })));
@@ -96,7 +99,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand: Brand, 
 
         } catch (err: any) {
             console.error(err);
-            setError(err.message || "Error al leer el recibo.");
+            setError(err.message || 'Error al leer el recibo.');
         } finally {
             setIsLoading(false);
         }
@@ -146,9 +149,9 @@ export default function BillSplitterFeature({ brand, banners }: { brand: Brand, 
 
                 {/* ERROR MSG */}
                 {error && (
-                    <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-between animate-in fade-in slide-in-from-top-4">
-                        <p className="text-red-300 text-xs font-medium">{error}</p>
-                        <button onClick={() => setError(null)} className="text-white opacity-50 hover:opacity-100">✕</button>
+                    <div className={`mb-6 p-4 rounded-2xl flex items-center justify-between animate-in fade-in slide-in-from-top-4 ${isRateLimitError ? 'bg-amber-500/10 border border-amber-400/20' : 'bg-red-500/10 border border-red-500/20'}`}>
+                        <p className={`${isRateLimitError ? 'text-amber-100' : 'text-red-300'} text-xs font-medium`}>{error}</p>
+                        <button onClick={() => { setError(null); setIsRateLimitError(false); }} className="text-white opacity-50 hover:opacity-100">✕</button>
                     </div>
                 )}
 
@@ -319,6 +322,14 @@ export default function BillSplitterFeature({ brand, banners }: { brand: Brand, 
                                 ${totals.totalBill.toFixed(2)}
                             </h2>
                         </div>
+
+                        {(!brand || !brand.logoUrl || brand.name?.toLowerCase() === 'splitpay') && storeName && (
+                            <div className="bg-zinc-800/50 border border-zinc-700/60 rounded-3xl p-4 text-sm text-zinc-300">
+                                <p className="leading-6">
+                                    ¿Eres dueño de <span className="font-semibold text-white">{storeName}</span>? Personaliza esta pantalla con tu logo, elimina los anuncios y ofrece una mejor experiencia a tus clientes. <a href="mailto:admin@tresapps.com?subject=Quiero%20personalizar%20mi%20pantalla%20de%20pago" className="text-white underline">Contáctanos aquí</a>
+                                </p>
+                            </div>
+                        )}
 
                         <div className="space-y-4">
                             {people.map(p => {

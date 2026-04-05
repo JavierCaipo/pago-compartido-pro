@@ -91,6 +91,7 @@ export async function analyzeReceiptAction(formData: FormData) {
         const prompt = `
       Actúa como un sistema OCR experto en facturas de restaurantes.
       Analiza esta imagen y extrae SOLO los items consumibles (comida y bebida).
+      Además, si puedes identificar el nombre del local, devuélvelo como storeName.
       
       Reglas Estrictas:
       1. Ignora propinas, impuestos, subtotales o fechas.
@@ -100,10 +101,13 @@ export async function analyzeReceiptAction(formData: FormData) {
       5. NO añadas texto antes ni después del JSON (nada de \`\`\`json).
 
       Formato JSON requerido:
-      [
-        { "name": "Nombre del plato", "price": 10.50 },
-        { "name": "Bebida", "price": 5.00 }
-      ]
+      {
+        "storeName": "Nombre del local o null si no se puede determinar",
+        "items": [
+          { "name": "Nombre del plato", "price": 10.50 },
+          { "name": "Bebida", "price": 5.00 }
+        ]
+      }
     `;
 
         // 5. Ejecuta la IA
@@ -130,13 +134,23 @@ export async function analyzeReceiptAction(formData: FormData) {
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
 
         // 7. Parseo Seguro
-        const items = JSON.parse(text);
+        const payload = JSON.parse(text);
+
+        let storeName: string | null = null;
+        let items: any = null;
+
+        if (Array.isArray(payload)) {
+            items = payload;
+        } else if (payload && typeof payload === 'object') {
+            storeName = typeof payload.storeName === 'string' ? payload.storeName.trim() || null : null;
+            items = payload.items ?? payload;
+        }
 
         if (!Array.isArray(items)) {
             throw new Error("La IA no devolvió una lista de items válida.");
         }
 
-        return { success: true, data: items };
+        return { success: true, data: { storeName, items } };
 
     } catch (error: any) {
         console.error("💥 Error en Server Action:", error);

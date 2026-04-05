@@ -23,7 +23,8 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "tailwind-merge": "^3.4.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "browser-image-compression": "^2.0.1"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.23",
