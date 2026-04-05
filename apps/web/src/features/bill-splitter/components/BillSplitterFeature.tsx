@@ -21,6 +21,7 @@ const Icons = {
 const compressImage = async (file: File): Promise<File> => {
     const options = {
         maxSizeMB: 0.8,
+        // eslint-disable-next-line
         maxWidthOrHeight: 1920,
         useWebWorker: true,
         initialQuality: 0.75,
@@ -139,7 +140,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
     if (!isMounted) return <div className="block-size-screen bg-black" />;
 
     return (
-        <div className="bg-black text-white font-sans selection:bg-purple-500/30 relative pb-20">
+        <div className="w-full max-w-md mx-auto min-h-screen flex flex-col bg-black text-white font-sans selection:bg-purple-500/30 relative pb-20">
 
             {/* BACKGROUND BLOBS - Absolute para no interfieren con scroll */}
             <div className="fixed inset-block-start-[-20%] inset-inline-start-[-10%] inline-size-[500px] block-size-[500px] bg-purple-900/20 rounded-full blur-[120px] pointer-events-none -z-10"></div>
@@ -326,7 +327,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                         {(!brand || !brand.logoUrl || brand.name?.toLowerCase() === 'splitpay') && storeName && (
                             <div className="bg-zinc-800/50 border border-zinc-700/60 rounded-3xl p-4 text-sm text-zinc-300">
                                 <p className="leading-6">
-                                    ¿Eres dueño de <span className="font-semibold text-white">{storeName}</span>? Personaliza esta pantalla con tu logo, elimina los anuncios y ofrece una mejor experiencia a tus clientes. <a href="mailto:admin@tresapps.com?subject=Quiero%20personalizar%20mi%20pantalla%20de%20pago" className="text-white underline">Contáctanos aquí</a>
+                                    ¿Eres dueño de <span className="font-semibold text-white">{storeName}</span>? Personaliza esta pantalla con tu logo, elimina los anuncios y ofrece una mejor experiencia a tus clientes. <a href={`https://wa.me/18156566056?text=Hola,%20soy%20dueño%20de%20${encodeURIComponent(storeName)}.%20Me%20interesa%20personalizar%20la%20pantalla%20de%20SplitPay.`} target="_blank" rel="noopener noreferrer" className="text-white underline">Contáctanos aquí</a>
                                 </p>
                             </div>
                         )}

@@ -17,6 +17,16 @@ type Message = {
   text: string;
 };
 
+type Negocio = {
+  id: string;
+  nombre: string;
+  slug: string;
+  color_primario: string;
+  logo_url: string;
+  activo: boolean;
+  fecha_suscripcion: string; // ISO date string
+};
+
 export default function AdminPage() {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -33,6 +43,109 @@ export default function AdminPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<Message | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Estados para pestañas y gestión
+  const [activeTab, setActiveTab] = useState<'register' | 'manage'>('register');
+  const [negocios, setNegocios] = useState<Negocio[]>([]);
+  const [isLoadingNegocios, setIsLoadingNegocios] = useState(false);
+
+  // Fetch negocios
+  const fetchNegocios = async () => {
+    setIsLoadingNegocios(true);
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from('negocios')
+        .select('*')
+        .order('fecha_suscripcion', { ascending: false });
+
+      if (error) throw error;
+      setNegocios(data || []);
+    } catch (error) {
+      console.error('Error fetching negocios:', error);
+      setMessage({ type: 'error', text: 'Error al cargar los locales' });
+    } finally {
+      setIsLoadingNegocios(false);
+    }
+  };
+
+  // Toggle activo
+  const toggleActivo = async (id: string, currentActivo: boolean) => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('negocios')
+        .update({ activo: !currentActivo })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Update local state
+      setNegocios(prev => prev.map(n => 
+        n.id === id ? { ...n, activo: !currentActivo } : n
+      ));
+
+      setMessage({ 
+        type: 'success', 
+        text: `Local ${!currentActivo ? 'activado' : 'desactivado'} correctamente` 
+      });
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      console.error('Error toggling activo:', error);
+      setMessage({ type: 'error', text: 'Error al cambiar el estado del local' });
+    }
+  };
+
+  // Eliminar negocio
+  const deleteNegocio = async (id: string, nombre: string) => {
+    if (!confirm(`¿Estás seguro de eliminar "${nombre}"? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('negocios')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Update local state
+      setNegocios(prev => prev.filter(n => n.id !== id));
+
+      setMessage({ type: 'success', text: `Local "${nombre}" eliminado correctamente` });
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      console.error('Error deleting negocio:', error);
+      setMessage({ type: 'error', text: 'Error al eliminar el local' });
+    }
+  };
+
+  // Load negocios when tab changes to manage
+  useEffect(() => {
+    if (activeTab === 'manage') {
+      fetchNegocios();
+    }
+  }, [activeTab]);
+
+  // Utility functions
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  };
+
+  const getRenewalDays = (fechaSuscripcion: string) => {
+    const subDate = new Date(fechaSuscripcion);
+    const nextMonth = new Date(subDate.getFullYear(), subDate.getMonth() + 1, subDate.getDate());
+    const today = new Date();
+    const diffTime = nextMonth.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
 
   // Check authentication
   useEffect(() => {
@@ -225,30 +338,61 @@ export default function AdminPage() {
 
         {/* Main Content */}
         <div className="px-4 py-12">
-          <div className="max-inline-size-2xl mx-auto">
-            {/* Header Section */}
-            <div className="mb-12">
-              <h2 className="text-4xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
-                Registrar Nuevo Local
-              </h2>
-              <p className="text-zinc-400 text-sm">Crea una marca blanca para tu restaurante o negocio</p>
+          <div className="max-inline-size-6xl mx-auto">
+            {/* Tabs */}
+            <div className="mb-8">
+              <div className="flex space-x-1 bg-zinc-900/50 p-1 rounded-2xl border border-zinc-800">
+                <button
+                  onClick={() => setActiveTab('register')}
+                  className={`flex-1 py-3 px-6 rounded-xl font-semibold text-sm transition-all ${
+                    activeTab === 'register'
+                      ? 'bg-purple-600 text-white shadow-lg'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                  }`}
+                >
+                  Registrar Local
+                </button>
+                <button
+                  onClick={() => setActiveTab('manage')}
+                  className={`flex-1 py-3 px-6 rounded-xl font-semibold text-sm transition-all ${
+                    activeTab === 'manage'
+                      ? 'bg-purple-600 text-white shadow-lg'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+                  }`}
+                >
+                  Gestionar Locales
+                </button>
+              </div>
             </div>
 
-            {/* Main Form Card */}
-            <div className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 rounded-3xl p-8 shadow-2xl mb-8">
-              <form onSubmit={handleSubmit} className="space-y-8">
-                {/* Message Alert */}
-                {message && (
-                  <div
-                    className={`p-4 rounded-2xl border transition-all animate-in fade-in slide-in-from-top-2 ${
-                      message.type === 'success'
-                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                        : 'bg-red-500/10 border-red-500/30 text-red-300'
-                    }`}
-                  >
-                    {message.text}
-                  </div>
-                )}
+            {/* Global Message Alert */}
+            {message && (
+              <div
+                className={`mb-8 p-4 rounded-2xl border transition-all animate-in fade-in slide-in-from-top-2 ${
+                  message.type === 'success'
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                    : 'bg-red-500/10 border-red-500/30 text-red-300'
+                }`}
+              >
+                {message.text}
+              </div>
+            )}
+
+            {/* Tab Content */}
+            {activeTab === 'register' && (
+              <>
+                {/* Header Section */}
+                <div className="mb-12">
+                  <h2 className="text-4xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+                    Registrar Nuevo Local
+                  </h2>
+                  <p className="text-zinc-400 text-sm">Crea una marca blanca para tu restaurante o negocio</p>
+                </div>
+
+                {/* Main Form Card */}
+                <div className="max-inline-size-2xl mx-auto">
+                  <div className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 rounded-3xl p-8 shadow-2xl mb-8">
+                    <form onSubmit={handleSubmit} className="space-y-8">
 
                 {/* Form Grid */}
                 <div className="space-y-6">
@@ -394,6 +538,108 @@ export default function AdminPage() {
                 <li>• Una vez registrado, el local estará disponible en la plataforma</li>
               </ul>
             </div>
+                </div>
+              </>
+            )}
+
+            {activeTab === 'manage' && (
+              <>
+                {/* Header Section */}
+                <div className="mb-12">
+                  <h2 className="text-4xl font-black bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+                    Gestionar Locales
+                  </h2>
+                  <p className="text-zinc-400 text-sm">Administra los locales registrados y sus suscripciones</p>
+                </div>
+
+                {/* Loading State */}
+                {isLoadingNegocios && (
+                  <div className="text-center py-12">
+                    <div className="inline-size-12 block-size-12 rounded-full border-4 border-purple-500/30 border-t-purple-500 animate-spin mb-4"></div>
+                    <p className="text-zinc-400">Cargando locales...</p>
+                  </div>
+                )}
+
+                {/* Negocios List */}
+                {!isLoadingNegocios && negocios.length === 0 && (
+                  <div className="text-center py-12">
+                    <div className="inline-size-24 block-size-24 rounded-full bg-zinc-900/50 flex items-center justify-center mx-auto mb-4">
+                      <span className="text-4xl">🏪</span>
+                    </div>
+                    <h3 className="text-xl font-bold text-zinc-300 mb-2">No hay locales registrados</h3>
+                    <p className="text-zinc-500">Registra tu primer local usando la pestaña "Registrar Local"</p>
+                  </div>
+                )}
+
+                {!isLoadingNegocios && negocios.length > 0 && (
+                  <div className="space-y-4">
+                    {negocios.map((negocio) => {
+                      const renewalDays = getRenewalDays(negocio.fecha_suscripcion);
+                      return (
+                        <div key={negocio.id} className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 rounded-3xl p-6 shadow-2xl">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <img
+                                src={negocio.logo_url}
+                                alt={negocio.nombre}
+                                className="inline-size-12 block-size-12 rounded-full object-cover border-2 border-zinc-700"
+                              />
+                              <div>
+                                <h3 className="text-lg font-bold text-white">{negocio.nombre}</h3>
+                                <p className="text-sm text-zinc-400">miapp.com/{negocio.slug}</p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-6">
+                              {/* Fecha y renovación */}
+                              <div className="text-right">
+                                <p className="text-sm text-zinc-400">Suscripción</p>
+                                <p className="text-sm font-medium text-white">{formatDate(negocio.fecha_suscripcion)}</p>
+                                {renewalDays <= 7 && renewalDays > 0 && (
+                                  <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs">
+                                    Renueva en {renewalDays} día{renewalDays !== 1 ? 's' : ''}
+                                  </span>
+                                )}
+                                {renewalDays <= 0 && (
+                                  <span className="inline-block mt-1 px-2 py-0.5 rounded-full bg-red-500/10 border border-red-500/30 text-red-400 text-xs">
+                                    Vencida
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Toggle Activo */}
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm text-zinc-400">Activo</span>
+                                <button
+                                  onClick={() => toggleActivo(negocio.id, negocio.activo)}
+                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                    negocio.activo ? 'bg-purple-600' : 'bg-zinc-600'
+                                  }`}
+                                >
+                                  <span
+                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                      negocio.activo ? 'translate-x-6' : 'translate-x-1'
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+
+                              {/* Delete Button */}
+                              <button
+                                onClick={() => deleteNegocio(negocio.id, negocio.nombre)}
+                                className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors text-sm font-semibold"
+                              >
+                                🗑️ Eliminar
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       </div>
