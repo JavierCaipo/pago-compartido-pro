@@ -1,30 +1,42 @@
 import React, { useState, useEffect } from 'react';
 import { Item, Person } from '../types';
-import { Check, X, GripHorizontal } from 'lucide-react';
+import { Check, X, GripHorizontal, Minus, Plus } from 'lucide-react';
 
 interface Props {
   item: Item | null;
   people: Person[];
   onClose: () => void;
-  onSave: (itemId: number, assignedTo: number[]) => void;
+  onSave: (itemId: number, assignments: { personId: number, quantity: number }[]) => void;
 }
 
 export default function ItemAssignmentModal({ item, people, onClose, onSave }: Props) {
-  const [selected, setSelected] = useState<number[]>([]);
+  const [assignments, setAssignments] = useState<{ personId: number, quantity: number }[]>([]);
 
-  // Al abrir, cargar los asignados actuales
+  // Al abrir, cargar las asignaciones actuales
   useEffect(() => {
-    if (item) setSelected(item.assignedTo);
+    if (item) setAssignments(item.assignments);
   }, [item]);
 
   if (!item) return null;
 
-  const toggle = (id: number) => {
-    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  const updateQuantity = (personId: number, delta: number) => {
+    setAssignments(prev => {
+      const existing = prev.find(a => a.personId === personId);
+      if (existing) {
+        const newQuantity = Math.max(0, existing.quantity + delta);
+        if (newQuantity === 0) {
+          return prev.filter(a => a.personId !== personId);
+        }
+        return prev.map(a => a.personId === personId ? { ...a, quantity: newQuantity } : a);
+      } else if (delta > 0) {
+        return [...prev, { personId, quantity: delta }];
+      }
+      return prev;
+    });
   };
 
-  // Cálculo en tiempo real de cuánto pagaría cada uno
-  const splitPrice = selected.length > 0 ? item.price / selected.length : item.price;
+  const totalAssigned = assignments.reduce((sum, a) => sum + a.quantity, 0);
+  const unitPrice = totalAssigned > 0 ? item.price / totalAssigned : item.price;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
@@ -47,12 +59,15 @@ export default function ItemAssignmentModal({ item, people, onClose, onSave }: P
             <div className='flex-1 pr-4'>
               <h3 className="text-gray-500 text-[10px] uppercase tracking-widest font-bold mb-2">Asignando Item</h3>
               <h2 className="text-2xl font-bold text-white leading-tight">{item.name}</h2>
+              {item.quantity && item.quantity > 1 && (
+                <p className="text-sm text-gray-400">Cantidad total: {item.quantity}</p>
+              )}
             </div>
             <div className="text-right shrink-0">
               <div className="text-3xl font-bold text-[#9d25f4] tracking-tight">${item.price.toFixed(2)}</div>
-              {selected.length > 1 && (
+              {totalAssigned > 0 && (
                 <div className="text-[11px] text-gray-400 font-mono mt-1 font-medium bg-white/5 px-2 py-0.5 rounded-md inline-block">
-                  ${splitPrice.toFixed(2)} c/u
+                  ${unitPrice.toFixed(2)} c/u
                 </div>
               )}
             </div>
@@ -61,30 +76,47 @@ export default function ItemAssignmentModal({ item, people, onClose, onSave }: P
           {/* Lista de Personas */}
           <div className="space-y-2 overflow-y-auto custom-scrollbar flex-1 -mx-2 px-2 pb-4">
             {people.map(p => {
-              const isSelected = selected.includes(p.id);
+              const assignment = assignments.find(a => a.personId === p.id);
+              const quantity = assignment?.quantity || 0;
+              const cost = quantity * unitPrice;
               return (
                 <div
                   key={p.id}
-                  onClick={() => toggle(p.id)}
-                  className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border duration-200 active:scale-[0.98] ${isSelected
+                  className={`flex items-center justify-between p-4 rounded-2xl border transition-all duration-200 ${quantity > 0
                     ? 'bg-[#9d25f4] border-[#9d25f4] text-white shadow-lg shadow-purple-900/30'
-                    : 'bg-[#1e1e1e] border-transparent text-gray-400 hover:bg-[#252525]'
+                    : 'bg-[#1e1e1e] border-transparent text-gray-400'
                     }`}
                 >
                   <div className="flex items-center gap-4">
-                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${isSelected ? 'bg-white text-[#9d25f4]' : 'bg-[#111] text-gray-500'}`}>
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center text-sm font-bold transition-colors ${quantity > 0 ? 'bg-white text-[#9d25f4]' : 'bg-[#111] text-gray-500'}`}>
                       {p.name.charAt(0)}
                     </div>
-                    <span className={`text-lg font-medium ${isSelected ? 'text-white' : 'text-gray-300'}`}>{p.name}</span>
+                    <div>
+                      <span className={`text-lg font-medium ${quantity > 0 ? 'text-white' : 'text-gray-300'}`}>{p.name}</span>
+                      {quantity > 0 && (
+                        <div className="text-sm text-gray-300">${cost.toFixed(2)}</div>
+                      )}
+                    </div>
                   </div>
 
-                  {isSelected ? (
-                    <div className="w-7 h-7 rounded-full bg-white text-[#9d25f4] flex items-center justify-center shadow-sm">
-                      <Check className="w-4 h-4" strokeWidth={4} />
-                    </div>
-                  ) : (
-                    <div className="w-7 h-7 rounded-full border-2 border-gray-700 opacity-50"></div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => updateQuantity(p.id, -1)}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${quantity > 0 ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+                      disabled={quantity === 0}
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className={`w-8 text-center font-bold ${quantity > 0 ? 'text-white' : 'text-gray-500'}`}>
+                      {quantity}
+                    </span>
+                    <button
+                      onClick={() => updateQuantity(p.id, 1)}
+                      className="w-8 h-8 rounded-full bg-white/20 text-white hover:bg-white/30 flex items-center justify-center transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -99,10 +131,10 @@ export default function ItemAssignmentModal({ item, people, onClose, onSave }: P
               Cancelar
             </button>
             <button
-              onClick={() => { onSave(item.id, selected); onClose(); }}
+              onClick={() => { onSave(item.id, assignments); onClose(); }}
               className="col-span-2 py-4 rounded-2xl font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 shadow-xl shadow-indigo-900/20 transition-all active:scale-95 flex items-center justify-center gap-2 text-sm uppercase tracking-wide"
             >
-              Confirmar <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] ml-1">{selected.length}</span>
+              Confirmar <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] ml-1">{totalAssigned}</span>
             </button>
           </div>
         </div>

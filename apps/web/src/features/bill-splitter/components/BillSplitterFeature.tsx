@@ -4,6 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Item, Person } from '../types';
 import { analyzeReceiptAction } from '../actions/analyze-receipt';
 import ItemAssignmentModal from './ItemAssignmentModal';
+import ReferralCarousel from './ReferralCarousel';
+import { BannerRow } from '../types';
 
 // --- ICONOS PREMIUM ---
 const Icons = {
@@ -46,7 +48,14 @@ const compressImage = async (file: File): Promise<File> => {
     });
 };
 
-export default function BillSplitterFeature() {
+type Brand = {
+    name: string;
+    logoUrl?: string;
+    primaryColor?: string;
+    secondaryColor?: string;
+};
+
+export default function BillSplitterFeature({ brand, banners }: { brand: Brand, banners: BannerRow[] }) {
     const [isMounted, setIsMounted] = useState(false);
     const [step, setStep] = useState<'upload' | 'assign' | 'summary'>('upload');
 
@@ -81,7 +90,7 @@ export default function BillSplitterFeature() {
             if (!rawItems || rawItems.length === 0) throw new Error("No se encontraron items.");
 
             setItems(rawItems.map((item, idx) => ({
-                id: idx, name: item.name, price: item.price, assignedTo: []
+                id: idx, name: item.name, price: item.price, quantity: 1, assignments: []
             })));
             setStep('assign');
 
@@ -110,39 +119,30 @@ export default function BillSplitterFeature() {
 
         items.forEach(item => {
             totalBill += item.price;
-            if (item.assignedTo.length === 0) {
+            const totalAssigned = item.assignments.reduce((sum, a) => sum + a.quantity, 0);
+            if (totalAssigned === 0) {
                 unassigned += item.price;
             } else {
-                const splitPrice = item.price / item.assignedTo.length;
-                item.assignedTo.forEach(pid => map.set(pid, (map.get(pid) || 0) + splitPrice));
+                const unitPrice = item.price / totalAssigned;
+                item.assignments.forEach(assignment => {
+                    const cost = assignment.quantity * unitPrice;
+                    map.set(assignment.personId, (map.get(assignment.personId) || 0) + cost);
+                });
             }
         });
         return { map, totalBill, unassigned };
     }, [items, people]);
 
-    if (!isMounted) return <div className="min-h-screen bg-black" />;
+    if (!isMounted) return <div className="h-screen bg-black" />;
 
     return (
-        <div className="min-h-screen bg-black text-white font-sans selection:bg-purple-500/30 overflow-hidden relative">
+        <div className="bg-black text-white font-sans selection:bg-purple-500/30 relative pb-20">
 
-            {/* BACKGROUND BLOBS */}
-            <div className="fixed top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[120px] pointer-events-none"></div>
-            <div className="fixed bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-indigo-900/20 rounded-full blur-[100px] pointer-events-none"></div>
+            {/* BACKGROUND BLOBS - Absolute para no interfieren con scroll */}
+            <div className="fixed top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-900/20 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+            <div className="fixed bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-indigo-900/20 rounded-full blur-[100px] pointer-events-none -z-10"></div>
 
-            {/* HEADER */}
-            <header className="p-6 flex justify-between items-center relative z-20">
-                <h1 className="font-bold text-xl tracking-tight flex items-center gap-2">
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">Pago</span>
-                    <span className="text-white">Compartido</span>
-                </h1>
-                {step !== 'upload' && (
-                    <button onClick={() => { setItems([]); setStep('upload'); }} className="text-xs font-medium text-zinc-500 hover:text-white transition-colors">
-                        Reiniciar
-                    </button>
-                )}
-            </header>
-
-            <main className="max-w-md mx-auto px-6 relative z-10 pb-32">
+            <main className="px-4 relative z-10">
 
                 {/* ERROR MSG */}
                 {error && (
@@ -154,7 +154,7 @@ export default function BillSplitterFeature() {
 
                 {/* --- PASO 1: UPLOAD (Scanner) --- */}
                 {step === 'upload' && (
-                    <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-12">
+                    <div className="flex flex-col items-center justify-center min-h-[70vh] space-y-12">
                         {isLoading ? (
                             <div className="text-center">
                                 <div className="relative w-24 h-24 mx-auto mb-6">
@@ -194,11 +194,11 @@ export default function BillSplitterFeature() {
 
                 {/* --- PASO 2: ASIGNAR --- */}
                 {step === 'assign' && (
-                    <div className="animate-in fade-in slide-in-from-bottom-8 duration-500">
+                    <div className="animate-in fade-in slide-in-from-bottom-8 duration-500 space-y-6">
 
                         {/* HERO CARD */}
-                        <div className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 rounded-3xl p-8 mb-8 text-center relative overflow-hidden shadow-2xl">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
+                        <div className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 rounded-3xl p-8 text-center relative overflow-hidden shadow-2xl">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl -me-10 -mt-10"></div>
                             <p className="text-zinc-500 text-[10px] uppercase tracking-[0.2em] font-bold mb-2">Total a Dividir</p>
                             <h2 className="text-5xl font-black text-white tracking-tighter">${totals.totalBill.toFixed(2)}</h2>
 
@@ -216,7 +216,7 @@ export default function BillSplitterFeature() {
                         </div>
 
                         {/* PERSONAS */}
-                        <div className="mb-8">
+                        <div>
                             <div className="flex items-center justify-between mb-3 px-1">
                                 <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-wider">Participantes</h3>
                                 <button onClick={addPerson} className="text-purple-400 text-xs font-bold hover:text-purple-300">+ Nuevo</button>
@@ -232,7 +232,7 @@ export default function BillSplitterFeature() {
                                             />
                                         </div>
                                         {people.length > 1 && (
-                                            <button onClick={() => updatePersonName(p.id, "")} className="absolute -top-1 -right-1 w-5 h-5 bg-zinc-800 rounded-full text-zinc-500 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity border border-zinc-700">✕</button>
+                                            <button onClick={() => setPeople(people.filter(x => x.id !== p.id))} className="absolute -top-1 -right-1 w-5 h-5 bg-zinc-800 rounded-full text-zinc-500 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity border border-zinc-700">✕</button>
                                         )}
                                     </div>
                                 ))}
@@ -243,10 +243,11 @@ export default function BillSplitterFeature() {
                         </div>
 
                         {/* LISTA ITEMS */}
-                        <div className="space-y-3 mb-32">
+                        <div className="space-y-3">
                             <h3 className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-2 px-1">Consumos</h3>
                             {items.map(item => {
-                                const isAssigned = item.assignedTo.length > 0;
+                                const isAssigned = item.assignments.length > 0;
+                                const totalAssigned = item.assignments.reduce((sum, a) => sum + a.quantity, 0);
                                 return (
                                     <div
                                         key={item.id}
@@ -257,27 +258,30 @@ export default function BillSplitterFeature() {
                                             }`}
                                     >
                                         <div className="flex justify-between items-start relative z-10">
-                                            <div className="flex-1 pr-4">
+                                            <div className="flex-1 pe-4">
                                                 <h4 className={`text-sm font-medium leading-relaxed ${isAssigned ? 'text-white' : 'text-zinc-400'}`}>{item.name}</h4>
                                                 <div className="mt-2 flex items-center gap-2">
                                                     {isAssigned ? (
                                                         <div className="flex -space-x-2">
-                                                            {item.assignedTo.map(pid => (
-                                                                <div key={pid} className="w-6 h-6 rounded-full bg-purple-600 border-2 border-zinc-900 flex items-center justify-center text-[9px] font-bold text-white shadow-sm">
-                                                                    {people.find(p => p.id === pid)?.name.charAt(0)}
-                                                                </div>
-                                                            ))}
+                                                            {item.assignments.map(assignment => {
+                                                                const person = people.find(p => p.id === assignment.personId);
+                                                                return (
+                                                                    <div key={assignment.personId} className="w-6 h-6 rounded-full bg-purple-600 border-2 border-zinc-900 flex items-center justify-center text-[9px] font-bold text-white shadow-sm">
+                                                                        {person?.name?.charAt(0)}
+                                                                    </div>
+                                                                )
+                                                            })}
                                                         </div>
                                                     ) : (
                                                         <span className="text-[10px] text-zinc-600 bg-zinc-900/50 px-2 py-0.5 rounded-full border border-zinc-800">Toca para asignar</span>
                                                     )}
                                                 </div>
                                             </div>
-                                            <div className="text-right">
+                                            <div className="text-end">
                                                 <span className={`text-base font-bold ${isAssigned ? 'text-purple-400' : 'text-zinc-500'}`}>${item.price.toFixed(2)}</span>
-                                                {isAssigned && item.assignedTo.length > 1 && (
+                                                {isAssigned && totalAssigned > 1 && (
                                                     <div className="text-[10px] text-zinc-500 mt-1 font-medium bg-zinc-950/50 px-1.5 py-0.5 rounded-md inline-block">
-                                                        ${(item.price / item.assignedTo.length).toFixed(2)} c/u
+                                                        ${(item.price / totalAssigned).toFixed(2)} c/u
                                                     </div>
                                                 )}
                                             </div>
@@ -288,58 +292,84 @@ export default function BillSplitterFeature() {
                             })}
                         </div>
 
-                        {/* BOTÓN FLOTANTE */}
-                        <div className="fixed bottom-6 left-6 right-6 z-40">
-                            <button
-                                onClick={() => setStep('summary')}
-                                disabled={totals.unassigned > 0.1}
-                                className={`w-full py-4 rounded-2xl font-bold text-sm shadow-xl transition-all duration-300 flex items-center justify-center gap-2 ${totals.unassigned < 0.1
-                                        ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-purple-900/40 hover:scale-[1.02]'
-                                        : 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700'
-                                    }`}
-                            >
-                                {totals.unassigned < 0.1 ? (
-                                    <>Ver Resumen Final <Icons.ArrowRight /></>
-                                ) : (
-                                    `Faltan asignar $${totals.unassigned.toFixed(2)}`
-                                )}
-                            </button>
-                        </div>
+                        {/* BOTÓN */}
+                        <button
+                            onClick={() => setStep('summary')}
+                            disabled={totals.unassigned > 0.1}
+                            className={`w-full py-4 rounded-2xl font-bold text-sm shadow-xl transition-all duration-300 flex items-center justify-center gap-2 mt-6 ${totals.unassigned < 0.1
+                                    ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-purple-900/40 hover:scale-[1.02]'
+                                    : 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700'
+                                }`}
+                        >
+                            {totals.unassigned < 0.1 ? (
+                                <>Ver Resumen Final <Icons.ArrowRight /></>
+                            ) : (
+                                `Faltan asignar $${totals.unassigned.toFixed(2)}`
+                            )}
+                        </button>
                     </div>
                 )}
 
-                {/* --- PASO 3: RESUMEN FINAL --- */}
+                {/* --- PASO 3: RESUMEN --- */}
                 {step === 'summary' && (
-                    <div className="animate-in fade-in slide-in-from-right-8 duration-500 pt-8">
-                        <div className="text-center mb-12">
+                    <div className="animate-in fade-in slide-in-from-right-8 duration-500 space-y-6">
+                        <div className="text-center">
                             <p className="text-zinc-500 text-[10px] uppercase tracking-[0.2em] font-bold mb-3">Total del Grupo</p>
                             <h2 className="text-6xl font-black text-white tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-400">
                                 ${totals.totalBill.toFixed(2)}
                             </h2>
                         </div>
 
-                        <div className="space-y-4 mb-32">
+                        <div className="space-y-4">
                             {people.map(p => {
                                 const amount = totals.map.get(p.id) || 0;
                                 if (amount === 0) return null;
+                                
+                                // Calcular desglose de ítems para esta persona
+                                const itemBreakdown: { name: string, quantity: number }[] = [];
+                                items.forEach(item => {
+                                    const assignment = item.assignments.find(a => a.personId === p.id);
+                                    if (assignment && assignment.quantity > 0) {
+                                        itemBreakdown.push({ name: item.name, quantity: assignment.quantity });
+                                    }
+                                });
+                                
                                 return (
-                                    <div key={p.id} className="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800 flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-lg font-bold text-white shadow-lg shadow-purple-900/20">
-                                                {p.name.charAt(0)}
+                                    <div key={p.id} className="bg-zinc-900/50 p-6 rounded-3xl border border-zinc-800">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-lg font-bold text-white shadow-lg shadow-purple-900/20">
+                                                    {p.name.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-base font-bold text-white">{p.name}</h3>
+                                                    <p className="text-xs text-zinc-500">Su parte</p>
+                                                </div>
                                             </div>
-                                            <div>
-                                                <h3 className="text-base font-bold text-white">{p.name}</h3>
-                                                <p className="text-xs text-zinc-500">Su parte</p>
-                                            </div>
+                                            <span className="text-2xl font-bold text-white">${amount.toFixed(2)}</span>
                                         </div>
-                                        <span className="text-2xl font-bold text-white">${amount.toFixed(2)}</span>
+                                        
+                                        {/* Desglose de ítems */}
+                                        {itemBreakdown.length > 0 && (
+                                            <div className="mt-3 pt-3 border-t border-zinc-800">
+                                                <p className="text-xs text-zinc-500 mb-2">Desglose:</p>
+                                                <div className="space-y-1">
+                                                    {itemBreakdown.map((item, idx) => (
+                                                        <div key={idx} className="text-sm text-zinc-400">
+                                                            {item.quantity}x {item.name}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )
                             })}
                         </div>
 
-                        <div className="fixed bottom-6 left-6 right-6 z-40 flex flex-col gap-3">
+                        <ReferralCarousel banners={banners} />
+
+                        <div className="flex flex-col gap-3 pt-4">
                             <button className="w-full py-4 rounded-2xl font-bold text-sm bg-white text-black hover:bg-zinc-200 transition-colors shadow-lg">
                                 Compartir Resultados
                             </button>
@@ -357,8 +387,8 @@ export default function BillSplitterFeature() {
                     item={modalItem}
                     people={people}
                     onClose={() => setModalItem(null)}
-                    onSave={(id, assigned) => {
-                        setItems(items.map(i => i.id === id ? { ...i, assignedTo: assigned } : i));
+                    onSave={(id, assignments) => {
+                        setItems(items.map(i => i.id === id ? { ...i, assignments } : i));
                         setModalItem(null);
                     }}
                 />
