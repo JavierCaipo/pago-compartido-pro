@@ -26,29 +26,26 @@ export async function middleware(request: NextRequest) {
   }
 
   // Create response object to return
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  });
+  let response = NextResponse.next();
 
   // Create Supabase client for server-side operations
   const supabase = createServerClient(supabaseUrl, supabaseKey, {
     cookies: {
       getAll() {
-        return request.cookies.getAll();
+        return request.cookies.getAll().map(({ name, value }) => ({ name, value }));
       },
-      setCookie(name, value, options) {
-        response.cookies.set({
-          name,
-          value,
-          ...options,
-          sameSite: 'lax',
-          secure: process.env.NODE_ENV === 'production',
+      setAll(cookies, headers) {
+        cookies.forEach(({ name, value, options }) => {
+          response.cookies.set(name, value, {
+            ...options,
+            sameSite: 'lax',
+            secure: process.env.NODE_ENV === 'production',
+          });
         });
-      },
-      removeCookie(name, options) {
-        response.cookies.delete(name);
+
+        Object.entries(headers).forEach(([headerName, headerValue]) => {
+          response.headers.set(headerName, headerValue);
+        });
       },
     },
   });
