@@ -28,6 +28,7 @@ export default async function Home({ searchParams }: PageProps) {
       .from<NegocioRow>('negocios')
       .select('id,slug,nombre,logo_url,color_primario')
       .eq('slug', refSlug)
+      .eq('activo', true)
       .single();
 
     if (error) {
