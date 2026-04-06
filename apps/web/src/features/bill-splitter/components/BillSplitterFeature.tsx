@@ -115,6 +115,48 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
         setPeople(people.map(p => p.id === id ? { ...p, name } : p));
     };
 
+    const handleShare = async () => {
+        const businessName = brand?.name?.trim() || 'SplitPay';
+        const lines: string[] = [
+            `🧾 Cuenta en ${businessName}`,
+            `💰 Total: $${totals.totalBill.toFixed(2)}`,
+            '',
+        ];
+
+        people.forEach(person => {
+            const amount = totals.map.get(person.id) || 0;
+            lines.push(`👤 ${person.name}: $${amount.toFixed(2)}`);
+
+            const personItems = items
+                .map(item => {
+                    const assignment = item.assignments.find(a => a.personId === person.id);
+                    return assignment && assignment.quantity > 0
+                        ? `${assignment.quantity}x ${item.name}`
+                        : null;
+                })
+                .filter(Boolean) as string[];
+
+            personItems.forEach(itemLine => lines.push(`- ${itemLine}`));
+            lines.push('');
+        });
+
+        lines.push('Generado con SplitPay 💸');
+        const textToCopy = lines.join('\n');
+
+        try {
+            if (!navigator.clipboard) {
+                throw new Error('Portapapeles no disponible');
+            }
+            await navigator.clipboard.writeText(textToCopy);
+            setMessage({ type: 'success', text: 'Resumen copiado al portapapeles' });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (copyError) {
+            console.error('Error copiando al portapapeles:', copyError);
+            setMessage({ type: 'error', text: 'No se pudo copiar el resumen. Intenta de nuevo.' });
+            setTimeout(() => setMessage(null), 3000);
+        }
+    };
+
     const totals = useMemo(() => {
         const map = new Map<number, number>();
         people.forEach(p => map.set(p.id, 0));
@@ -158,7 +200,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
 
                 {/* --- PASO 1: UPLOAD (Scanner) --- */}
                 {step === 'upload' && (
-                    <div className="flex-1 flex flex-col justify-center space-y-12">
+                    <div className="flex-1 flex flex-col items-center justify-center w-full space-y-12">
                         {isLoading ? (
                             <div className="text-center">
                                     <div className="relative inline-size-24 block-size-24 mx-auto mb-6">
@@ -174,12 +216,12 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                                 <div className="relative group">
                                     <label className="cursor-pointer block">
                                         <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
-                                        <div className="inline-size-56 block-size-56 bg-gradient-to-b from-zinc-800 to-zinc-900 rounded-[2rem] border border-zinc-700 flex flex-col items-center justify-center shadow-2xl group-hover:border-purple-500/50 group-hover:shadow-purple-500/20 transition-all duration-300 transform group-hover:scale-105">
-                                            <div className="inline-size-16 block-size-16 bg-zinc-950 rounded-2xl flex items-center justify-center text-white mb-4 shadow-inner group-hover:text-purple-400 transition-colors">
+                                        <div className="inline-size-[15rem] block-size-[15rem] max-inline-size-full max-block-size-full bg-gradient-to-b from-zinc-800 to-zinc-900 rounded-[2rem] border border-zinc-700 flex flex-col items-center justify-center shadow-2xl group-hover:border-purple-500/50 group-hover:shadow-purple-500/20 transition-all duration-300 transform group-hover:scale-105 px-6 py-6">
+                                            <div className="inline-size-20 block-size-20 bg-zinc-950 rounded-2xl flex items-center justify-center text-white mb-5 shadow-inner group-hover:text-purple-400 transition-colors">
                                                 <Icons.Scan />
                                             </div>
-                                            <span className="font-bold text-lg text-white">Escanear</span>
-                                            <span className="text-xs text-zinc-500 mt-1">Toca para subir foto</span>
+                                            <span className="font-bold text-2xl text-white">Escanear</span>
+                                            <span className="text-sm text-zinc-500 mt-2">Toca para subir foto</span>
                                         </div>
                                     </label>
                                     <div className="absolute inset-0 bg-purple-600/20 rounded-[2rem] blur-2xl -z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
@@ -382,7 +424,10 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                         <ReferralCarousel banners={banners} />
 
                         <div className="flex flex-col gap-3 pt-4">
-                            <button className="inline-size-full py-4 rounded-2xl font-bold text-sm bg-white text-black hover:bg-zinc-200 transition-colors shadow-lg">
+                            <button
+                                onClick={handleShare}
+                                className="inline-size-full py-5 rounded-2xl font-bold text-base bg-white text-black hover:bg-zinc-200 transition-colors shadow-lg"
+                            >
                                 Compartir Resultados
                             </button>
                             <button
