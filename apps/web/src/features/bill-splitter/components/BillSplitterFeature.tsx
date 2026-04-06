@@ -52,7 +52,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
     const [storeName, setStoreName] = useState<string | null>(null);
     const [currency, setCurrency] = useState<string>("S/");
     const [modalItem, setModalItem] = useState<Item | null>(null);
-    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [buttonText, setButtonText] = useState<string>('Compartir Resultados');
 
     useEffect(() => setIsMounted(true), []);
 
@@ -150,17 +150,31 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
         lines.push('Generado con SplitPay 💸');
         const textToCopy = lines.join('\n');
 
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: 'Cuenta de SplitPay',
+                    text: textToCopy,
+                });
+                setButtonText('¡Compartido! 🚀');
+                setTimeout(() => setButtonText('Compartir Resultados'), 2500);
+                return;
+            } catch (shareError) {
+                console.log('Compartir cancelado', shareError);
+            }
+        }
+
         try {
             if (!navigator.clipboard) {
                 throw new Error('Portapapeles no disponible');
             }
             await navigator.clipboard.writeText(textToCopy);
-            setMessage({ type: 'success', text: 'Resumen copiado al portapapeles' });
-            setTimeout(() => setMessage(null), 3000);
+            setButtonText('¡Copiado al portapapeles! ✅');
+            setTimeout(() => setButtonText('Compartir Resultados'), 2500);
         } catch (copyError) {
             console.error('Error copiando al portapapeles:', copyError);
-            setMessage({ type: 'error', text: 'No se pudo copiar el resumen. Intenta de nuevo.' });
-            setTimeout(() => setMessage(null), 3000);
+            setButtonText('Error compartiendo. Intenta de nuevo.');
+            setTimeout(() => setButtonText('Compartir Resultados'), 2500);
         }
     };
 
@@ -202,19 +216,6 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                     <div className={`mb-6 p-4 rounded-2xl flex items-center justify-between animate-in fade-in slide-in-from-top-4 ${isRateLimitError ? 'bg-amber-500/10 border border-amber-400/20' : 'bg-red-500/10 border border-red-500/20'}`}>
                         <p className={`${isRateLimitError ? 'text-amber-100' : 'text-red-300'} text-xs font-medium`}>{error}</p>
                         <button onClick={() => { setError(null); setIsRateLimitError(false); }} className="text-white opacity-50 hover:opacity-100">✕</button>
-                    </div>
-                )}
-
-                {/* MESSAGE ALERT */}
-                {message && (
-                    <div
-                        className={`mb-6 p-4 rounded-2xl border transition-all animate-in fade-in slide-in-from-top-2 ${
-                            message.type === 'success'
-                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                                : 'bg-red-500/10 border-red-500/30 text-red-300'
-                        }`}
-                    >
-                        {message.text}
                     </div>
                 )}
 
@@ -448,7 +449,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                                 onClick={handleShare}
                                 className="inline-size-full py-5 rounded-2xl font-bold text-base bg-white text-black hover:bg-zinc-200 transition-colors shadow-lg"
                             >
-                                Compartir Resultados
+                                {buttonText}
                             </button>
                             <button
                                 onClick={() => { setItems([]); setStep('upload'); }}
