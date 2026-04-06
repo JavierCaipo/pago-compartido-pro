@@ -92,6 +92,7 @@ export async function analyzeReceiptAction(formData: FormData) {
       Actúa como un sistema OCR experto en facturas de restaurantes.
       Analiza esta imagen y extrae SOLO los items consumibles (comida y bebida).
       Además, si puedes identificar el nombre del local, devuélvelo como storeName.
+      También identifica la moneda utilizada (S/, $, €, etc.) y devuélvela como currency.
       
       Reglas Estrictas:
       1. Ignora propinas, impuestos, subtotales o fechas.
@@ -99,10 +100,12 @@ export async function analyzeReceiptAction(formData: FormData) {
       3. Traduce nombres genéricos al español si es necesario.
       4. DEBES responder EXCLUSIVAMENTE un JSON válido.
       5. NO añadas texto antes ni después del JSON (nada de \`\`\`json).
+      6. Si no puedes determinar la moneda, usa "S/" por defecto.
 
       Formato JSON requerido:
       {
         "storeName": "Nombre del local o null si no se puede determinar",
+        "currency": "S/",
         "items": [
           { "name": "Nombre del plato", "price": 10.50 },
           { "name": "Bebida", "price": 5.00 }
@@ -137,12 +140,14 @@ export async function analyzeReceiptAction(formData: FormData) {
         const payload = JSON.parse(text);
 
         let storeName: string | null = null;
+        let currency: string = "S/";
         let items: any = null;
 
         if (Array.isArray(payload)) {
             items = payload;
         } else if (payload && typeof payload === 'object') {
             storeName = typeof payload.storeName === 'string' ? payload.storeName.trim() || null : null;
+            currency = typeof payload.currency === 'string' ? payload.currency.trim() || "S/" : "S/";
             items = payload.items ?? payload;
         }
 
@@ -150,7 +155,7 @@ export async function analyzeReceiptAction(formData: FormData) {
             throw new Error("La IA no devolvió una lista de items válida.");
         }
 
-        return { success: true, data: { storeName, items } };
+        return { success: true, data: { storeName, currency, items } };
 
     } catch (error: any) {
         console.error("💥 Error en Server Action:", error);

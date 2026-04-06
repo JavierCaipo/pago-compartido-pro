@@ -15,6 +15,7 @@ export interface Person {
 export interface RawItem {
     name: string;
     price: number;
+    currency?: string;
 }
 
 export interface BannerRow {

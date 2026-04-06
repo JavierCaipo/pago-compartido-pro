@@ -7,9 +7,10 @@ interface Props {
   people: Person[];
   onClose: () => void;
   onSave: (itemId: number, assignments: { personId: number, quantity: number }[]) => void;
+  currency?: string;
 }
 
-export default function ItemAssignmentModal({ item, people, onClose, onSave }: Props) {
+export default function ItemAssignmentModal({ item, people, onClose, onSave, currency = "S/" }: Props) {
   const [assignments, setAssignments] = useState<{ personId: number, quantity: number }[]>([]);
 
   // Al abrir, cargar las asignaciones actuales
@@ -64,10 +65,10 @@ export default function ItemAssignmentModal({ item, people, onClose, onSave }: P
               )}
             </div>
             <div className="text-right shrink-0">
-              <div className="text-3xl font-bold text-[#9d25f4] tracking-tight">${item.price.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-[#9d25f4] tracking-tight">{currency}{item.price.toFixed(2)}</div>
               {totalAssigned > 0 && (
                 <div className="text-[11px] text-gray-400 font-mono mt-1 font-medium bg-white/5 px-2 py-0.5 rounded-md inline-block">
-                  ${unitPrice.toFixed(2)} c/u
+                  {currency}{unitPrice.toFixed(2)} c/u
                 </div>
               )}
             </div>
@@ -94,7 +95,7 @@ export default function ItemAssignmentModal({ item, people, onClose, onSave }: P
                     <div>
                       <span className={`text-lg font-medium ${quantity > 0 ? 'text-white' : 'text-gray-300'}`}>{p.name}</span>
                       {quantity > 0 && (
-                        <div className="text-sm text-gray-300">${cost.toFixed(2)}</div>
+                        <div className="text-sm text-gray-300">{currency}{cost.toFixed(2)}</div>
                       )}
                     </div>
                   </div>

@@ -50,7 +50,9 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
     const [error, setError] = useState<string | null>(null);
     const [isRateLimitError, setIsRateLimitError] = useState(false);
     const [storeName, setStoreName] = useState<string | null>(null);
+    const [currency, setCurrency] = useState<string>("S/");
     const [modalItem, setModalItem] = useState<Item | null>(null);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     useEffect(() => setIsMounted(true), []);
 
@@ -62,6 +64,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
         setError(null);
         setIsRateLimitError(false);
         setStoreName(null);
+        setCurrency("S/");
 
         try {
             // 1. COMPRIMIR IMAGEN (Soluciona error móvil)
@@ -86,6 +89,9 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
             const extractedStoreName = rawData && typeof rawData === 'object' && !Array.isArray(rawData)
                 ? typeof rawData.storeName === 'string' ? rawData.storeName.trim() : null
                 : null;
+            const extractedCurrency = rawData && typeof rawData === 'object' && !Array.isArray(rawData)
+                ? typeof rawData.currency === 'string' ? rawData.currency.trim() || "S/" : "S/"
+                : "S/";
             const rawItems = Array.isArray(rawData) ? rawData : rawData?.items;
 
             if (!Array.isArray(rawItems) || rawItems.length === 0) {
@@ -93,6 +99,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
             }
 
             setStoreName(extractedStoreName);
+            setCurrency(extractedCurrency);
             setItems(rawItems.map((item, idx) => ({
                 id: idx, name: item.name, price: item.price, quantity: 1, assignments: []
             })));
@@ -119,13 +126,13 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
         const businessName = brand?.name?.trim() || 'SplitPay';
         const lines: string[] = [
             `🧾 Cuenta en ${businessName}`,
-            `💰 Total: $${totals.totalBill.toFixed(2)}`,
+            `💰 Total: ${currency}${totals.totalBill.toFixed(2)}`,
             '',
         ];
 
         people.forEach(person => {
             const amount = totals.map.get(person.id) || 0;
-            lines.push(`👤 ${person.name}: $${amount.toFixed(2)}`);
+            lines.push(`👤 ${person.name}: ${currency}${amount.toFixed(2)}`);
 
             const personItems = items
                 .map(item => {
@@ -198,12 +205,25 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                     </div>
                 )}
 
+                {/* MESSAGE ALERT */}
+                {message && (
+                    <div
+                        className={`mb-6 p-4 rounded-2xl border transition-all animate-in fade-in slide-in-from-top-2 ${
+                            message.type === 'success'
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                                : 'bg-red-500/10 border-red-500/30 text-red-300'
+                        }`}
+                    >
+                        {message.text}
+                    </div>
+                )}
+
                 {/* --- PASO 1: UPLOAD (Scanner) --- */}
                 {step === 'upload' && (
-                    <div className="flex-1 flex flex-col items-center justify-center w-full space-y-12">
+                    <div className="flex-1 flex flex-col items-center justify-center w-full px-4 space-y-12">
                         {isLoading ? (
                             <div className="text-center">
-                                    <div className="relative inline-size-24 block-size-24 mx-auto mb-6">
+                                    <div className="relative w-32 h-32 mx-auto mb-6">
                                     <div className="absolute inset-0 border-4 border-purple-500/30 rounded-full"></div>
                                     <div className="absolute inset-0 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
                                     <div className="absolute inset-0 flex items-center justify-center text-purple-400"><Icons.Sparkles /></div>
@@ -246,12 +266,12 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                         <div className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 rounded-3xl p-8 text-center relative overflow-hidden shadow-2xl">
                             <div className="absolute inset-block-start-0 inset-inline-end-0 inline-size-32 block-size-32 bg-purple-500/10 rounded-full blur-2xl -me-10 -mt-10"></div>
                             <p className="text-zinc-500 text-[10px] uppercase tracking-[0.2em] font-bold mb-2">Total a Dividir</p>
-                            <h2 className="text-5xl font-black text-white tracking-tighter">${totals.totalBill.toFixed(2)}</h2>
+                            <h2 className="text-5xl font-black text-white tracking-tighter">{currency}{totals.totalBill.toFixed(2)}</h2>
 
                             {totals.unassigned > 0.01 ? (
                                 <div className="mt-4 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-zinc-900 border border-zinc-800">
                                     <div className="inline-size-1.5 block-size-1.5 rounded-full bg-orange-500 animate-pulse"></div>
-                                    <span className="text-xs text-zinc-400 font-medium">Falta asignar: <span className="text-white">${totals.unassigned.toFixed(2)}</span></span>
+                                    <span className="text-xs text-zinc-400 font-medium">Falta asignar: <span className="text-white">{currency}{totals.unassigned.toFixed(2)}</span></span>
                                 </div>
                             ) : (
                                 <div className="mt-4 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-950/30 border border-emerald-900/50">
@@ -324,10 +344,10 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                                                 </div>
                                             </div>
                                             <div className="text-end">
-                                                <span className={`text-base font-bold ${isAssigned ? 'text-purple-400' : 'text-zinc-500'}`}>${item.price.toFixed(2)}</span>
+                                                <span className={`text-base font-bold ${isAssigned ? 'text-purple-400' : 'text-zinc-500'}`}>{currency}{item.price.toFixed(2)}</span>
                                                 {isAssigned && totalAssigned > 1 && (
                                                     <div className="text-[10px] text-zinc-500 mt-1 font-medium bg-zinc-950/50 px-1.5 py-0.5 rounded-md inline-block">
-                                                        ${(item.price / totalAssigned).toFixed(2)} c/u
+                                                        {currency}{(item.price / totalAssigned).toFixed(2)} c/u
                                                     </div>
                                                 )}
                                             </div>
@@ -350,7 +370,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                             {totals.unassigned < 0.1 ? (
                                 <>Ver Resumen Final <Icons.ArrowRight /></>
                             ) : (
-                                `Faltan asignar $${totals.unassigned.toFixed(2)}`
+                                `Faltan asignar ${currency}{totals.unassigned.toFixed(2)}`
                             )}
                         </button>
                     </div>
@@ -362,7 +382,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                         <div className="text-center">
                             <p className="text-zinc-500 text-[10px] uppercase tracking-[0.2em] font-bold mb-3">Total del Grupo</p>
                             <h2 className="text-6xl font-black text-white tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-400">
-                                ${totals.totalBill.toFixed(2)}
+                                ${currency}{totals.totalBill.toFixed(2)}
                             </h2>
                         </div>
 
@@ -400,7 +420,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                                                     <p className="text-xs text-zinc-500">Su parte</p>
                                                 </div>
                                             </div>
-                                            <span className="text-2xl font-bold text-white">${amount.toFixed(2)}</span>
+                                            <span className="text-2xl font-bold text-white">{currency}{amount.toFixed(2)}</span>
                                         </div>
                                         
                                         {/* Desglose de ítems */}
@@ -448,6 +468,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                         setItems(items.map(i => i.id === id ? { ...i, assignments } : i));
                         setModalItem(null);
                     }}
+                    currency={currency}
                 />
 
             </main>
