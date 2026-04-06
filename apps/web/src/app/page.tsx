@@ -14,33 +14,31 @@ type Brand = {
 };
 
 export default async function Home({ searchParams }: PageProps) {
-  const resolvedSearchParams = await searchParams;
-  const refSlug = Array.isArray(resolvedSearchParams.ref) 
-    ? resolvedSearchParams.ref[0] 
-    : resolvedSearchParams.ref;
+  const params = await searchParams;
+  const slug = Array.isArray(params?.ref) ? params.ref[0] : params?.ref;
   
   const supabase = getSupabaseClient();
 
   let negocio: NegocioRow | null = null;
   let banners: BannerRow[] = [];
-  if (refSlug && supabase) {
-    const { data, error } = await supabase
-      .from<NegocioRow>('negocios')
-      .select('id,slug,nombre,logo_url,color_primario')
-      .eq('slug', refSlug)
+  if (slug && supabase) {
+    const { data: negocioData, error } = await supabase
+      .from('negocios')
+      .select('*')
+      .eq('slug', slug)
       .eq('activo', true)
       .single();
 
     if (error) {
       console.error('Supabase lookup failed:', error.message);
-    } else if (data) {
-      negocio = data;
+    } else if (negocioData) {
+      negocio = negocioData;
       
       // Fetch banners for this negocio
       const { data: bannerData, error: bannerError } = await supabase
         .from<BannerRow>('banners')
         .select('*')
-        .eq('negocio_id', data.id)
+        .eq('negocio_id', negocioData.id)
         .eq('activo', true);
 
       if (bannerError) {

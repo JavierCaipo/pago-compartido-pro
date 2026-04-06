@@ -122,6 +122,21 @@ export default function AdminPage() {
     }
   };
 
+  // Copiar URL del brand
+  const copyBrandUrl = async (slug: string) => {
+    const url = `${window.location.origin}/?ref=${slug}`;
+    
+    try {
+      await navigator.clipboard.writeText(url);
+      setMessage({ type: 'success', text: '¡Enlace copiado! 🔗' });
+      setTimeout(() => setMessage(null), 3000);
+    } catch (error) {
+      console.error('Error copying URL:', error);
+      setMessage({ type: 'error', text: 'Error al copiar el enlace' });
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
   // Load negocios when tab changes to manage
   useEffect(() => {
     if (activeTab === 'manage') {
@@ -624,6 +639,13 @@ export default function AdminPage() {
                                     />
                                   </button>
                                 </div>
+
+                                <button
+                                  onClick={() => copyBrandUrl(negocio.slug)}
+                                  className="px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-colors text-sm font-semibold"
+                                >
+                                  🔗 Copiar Enlace
+                                </button>
 
                                 <button
                                   onClick={() => deleteNegocio(negocio.id, negocio.nombre)}
