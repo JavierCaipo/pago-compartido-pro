@@ -312,7 +312,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-block-size-screen bg-black text-white font-sans">
+    <div className="min-block-size-screen bg-black text-white font-sans overflow-x-hidden w-full max-w-full px-4">
       {/* Background blobs */}
       <div className="fixed inset-block-start-[-20%] inset-inline-start-[-10%] inline-size-[500px] block-size-[500px] bg-purple-900/20 rounded-full blur-[120px] pointer-events-none -z-10"></div>
       <div className="fixed inset-block-end-[-10%] inset-inline-end-[-10%] inline-size-[400px] block-size-[400px] bg-indigo-900/20 rounded-full blur-[100px] pointer-events-none -z-10"></div>
@@ -408,7 +408,7 @@ export default function AdminPage() {
                       onChange={handleChange}
                       placeholder="ej: La Benita Restaurant"
                       disabled={isLoading}
-                      className="inline-size-full bg-zinc-800/50 border border-zinc-700 rounded-2xl px-5 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full box-border bg-zinc-800/50 border border-zinc-700 rounded-2xl px-5 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -426,7 +426,7 @@ export default function AdminPage() {
                         onChange={handleChange}
                         placeholder="ej: la-benita"
                         disabled={isLoading}
-                        className="flex-1 bg-zinc-800/50 border border-zinc-700 rounded-2xl px-5 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-1 w-full box-border bg-zinc-800/50 border border-zinc-700 rounded-2xl px-5 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                     </div>
                     <p className="text-xs text-zinc-500 mt-2">
@@ -456,7 +456,7 @@ export default function AdminPage() {
                         }
                         placeholder="#8b5cf6"
                         disabled={isLoading}
-                        className="flex-1 bg-zinc-800/50 border border-zinc-700 rounded-2xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-mono"
+                        className="flex-1 w-full box-border bg-zinc-800/50 border border-zinc-700 rounded-2xl px-4 py-3 text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-mono"
                       />
                     </div>
                   </div>
@@ -577,22 +577,22 @@ export default function AdminPage() {
                       const renewalDays = getRenewalDays(negocio.fecha_suscripcion);
                       return (
                         <div key={negocio.id} className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 rounded-3xl p-6 shadow-2xl">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
                               <img
                                 src={negocio.logo_url}
                                 alt={negocio.nombre}
-                                className="inline-size-12 block-size-12 rounded-full object-cover border-2 border-zinc-700"
+                                className="shrink-0 w-16 h-16 rounded-full object-cover border-2 border-zinc-700"
                               />
-                              <div>
-                                <h3 className="text-lg font-bold text-white">{negocio.nombre}</h3>
-                                <p className="text-sm text-zinc-400">miapp.com/{negocio.slug}</p>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-lg font-bold text-white truncate">{negocio.nombre}</h3>
+                                <p className="text-sm text-zinc-400 break-words">miapp.com/{negocio.slug}</p>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-6">
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto">
                               {/* Fecha y renovación */}
-                              <div className="text-right">
+                              <div className="text-left sm:text-right">
                                 <p className="text-sm text-zinc-400">Suscripción</p>
                                 <p className="text-sm font-medium text-white">{formatDate(negocio.fecha_suscripcion)}</p>
                                 {renewalDays <= 7 && renewalDays > 0 && (
@@ -607,30 +607,31 @@ export default function AdminPage() {
                                 )}
                               </div>
 
-                              {/* Toggle Activo */}
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm text-zinc-400">Activo</span>
-                                <button
-                                  onClick={() => toggleActivo(negocio.id, negocio.activo)}
-                                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                    negocio.activo ? 'bg-purple-600' : 'bg-zinc-600'
-                                  }`}
-                                >
-                                  <span
-                                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                      negocio.activo ? 'translate-x-6' : 'translate-x-1'
+                              {/* Toggle y Delete */}
+                              <div className="flex flex-row w-full sm:w-auto justify-between sm:justify-end items-center gap-4 mt-2 sm:mt-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-zinc-400">Activo</span>
+                                  <button
+                                    onClick={() => toggleActivo(negocio.id, negocio.activo)}
+                                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                      negocio.activo ? 'bg-purple-600' : 'bg-zinc-600'
                                     }`}
-                                  />
+                                  >
+                                    <span
+                                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                        negocio.activo ? 'translate-x-6' : 'translate-x-1'
+                                      }`}
+                                    />
+                                  </button>
+                                </div>
+
+                                <button
+                                  onClick={() => deleteNegocio(negocio.id, negocio.nombre)}
+                                  className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors text-sm font-semibold"
+                                >
+                                  🗑️ Eliminar
                                 </button>
                               </div>
-
-                              {/* Delete Button */}
-                              <button
-                                onClick={() => deleteNegocio(negocio.id, negocio.nombre)}
-                                className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition-colors text-sm font-semibold"
-                              >
-                                🗑️ Eliminar
-                              </button>
                             </div>
                           </div>
                         </div>

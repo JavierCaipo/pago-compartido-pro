@@ -140,7 +140,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
     if (!isMounted) return <div className="block-size-screen bg-black" />;
 
     return (
-        <div className="w-full max-w-md mx-auto min-h-screen flex flex-col bg-black text-white font-sans selection:bg-purple-500/30 relative pb-20">
+        <div className="w-full max-w-md mx-auto min-h-[100dvh] flex flex-col bg-black text-white font-sans selection:bg-purple-500/30 relative pb-20 pt-12">
 
             {/* BACKGROUND BLOBS - Absolute para no interfieren con scroll */}
             <div className="fixed inset-block-start-[-20%] inset-inline-start-[-10%] inline-size-[500px] block-size-[500px] bg-purple-900/20 rounded-full blur-[120px] pointer-events-none -z-10"></div>
@@ -158,7 +158,7 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
 
                 {/* --- PASO 1: UPLOAD (Scanner) --- */}
                 {step === 'upload' && (
-                    <div className="flex flex-col items-center justify-center min-block-size-[70vh] space-y-12">
+                    <div className="flex-1 flex flex-col justify-center space-y-12">
                         {isLoading ? (
                             <div className="text-center">
                                     <div className="relative inline-size-24 block-size-24 mx-auto mb-6">
