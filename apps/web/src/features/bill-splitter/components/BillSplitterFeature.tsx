@@ -211,23 +211,6 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
 
             <main className="px-4 relative z-10">
 
-                {/* HEADER DEL NEGOCIO */}
-                <div className="mb-6 flex items-center gap-3">
-                    {brand?.logoUrl ? (
-                        <img src={brand.logoUrl} alt={brand.name} className="w-8 h-8 rounded-full object-cover" />
-                    ) : (
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white text-xs font-bold">
-                            {brand?.name?.substring(0, 2).toUpperCase() || 'SP'}
-                        </div>
-                    )}
-                    <div>
-                        <p className="text-xs text-zinc-400 uppercase tracking-wider">Local</p>
-                        <h2 className="text-lg font-bold text-white" style={{ color: brand?.primaryColor || '#8b5cf6' }}>
-                            {brand?.name || 'SplitPay'}
-                        </h2>
-                    </div>
-                </div>
-
                 {/* ERROR MSG */}
                 {error && (
                     <div className={`mb-6 p-4 rounded-2xl flex items-center justify-between animate-in fade-in slide-in-from-top-4 ${isRateLimitError ? 'bg-amber-500/10 border border-amber-400/20' : 'bg-red-500/10 border border-red-500/20'}`}>

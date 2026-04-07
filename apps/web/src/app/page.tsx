@@ -1,10 +1,9 @@
 import BillSplitterFeature from '@/features/bill-splitter/components/BillSplitterFeature';
-import { getSupabaseClient, NegocioRow } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+import { NegocioRow } from '@/lib/supabase';
 import { BannerRow } from '@/features/bill-splitter/types';
 
-type PageProps = {
-  searchParams: Promise<{ ref?: string | string[] }>;
-};
+export const dynamic = 'force-dynamic';
 
 type Brand = {
   name: string;
@@ -13,15 +12,17 @@ type Brand = {
   secondaryColor?: string;
 };
 
-export default async function Home({ searchParams }: PageProps) {
-  const params = await searchParams;
-  const slug = Array.isArray(params?.ref) ? params.ref[0] : params?.ref;
+export default async function Home(props: { searchParams: Promise<{ ref?: string }> }) {
+  const searchParams = await props.searchParams;
+  const slug = searchParams?.ref;
   
-  const supabase = getSupabaseClient();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+  const supabase = createClient(supabaseUrl, supabaseKey);
 
   let negocio: NegocioRow | null = null;
   let banners: BannerRow[] = [];
-  if (slug && supabase) {
+  if (slug) {
     const { data: negocioData, error } = await supabase
       .from('negocios')
       .select('*')
@@ -49,12 +50,14 @@ export default async function Home({ searchParams }: PageProps) {
     }
   }
 
-  const brand: Brand = {
-    name: negocio?.nombre ?? 'SplitPay',
-    logoUrl: negocio?.logo_url,
-    primaryColor: negocio?.color_primario ?? '#8b5cf6',
-    secondaryColor: negocio?.color_primario ?? '#a1a1aa',
-  };
+  const brand: Brand | null = negocio
+    ? {
+        name: negocio.nombre,
+        logoUrl: negocio.logo_url,
+        primaryColor: negocio.color_primario ?? '#8b5cf6',
+        secondaryColor: negocio.color_primario ?? '#a1a1aa',
+      }
+    : null;
 
   return (
     <main className="min-block-size-screen flex items-center justify-center p-4 bg-zinc-950">
@@ -65,42 +68,42 @@ export default async function Home({ searchParams }: PageProps) {
         <header 
           className="sticky inset-block-start-0 z-50 backdrop-blur-md bg-black/5 border-block-end border-block-end-2 transition-colors duration-300"
           style={{ 
-            borderBlockEndColor: negocio ? brand.primaryColor : 'rgba(255,255,255,0.1)'
-          }}
-        >
-          <div className="px-4 py-3 flex items-center gap-3">
-            {/* Logo del Local */}
-            {brand.logoUrl ? (
-              <img
-                src={brand.logoUrl}
-                alt={brand.name}
-                className="inline-size-10 block-size-10 rounded-full object-cover border border-white/10 flex-shrink-0"
-              />
-            ) : (
-              <div className="flex inline-size-10 block-size-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-pink-600 text-white text-xs font-bold flex-shrink-0">
-                {brand.name.substring(0, 2).toUpperCase()}
+              borderBlockEndColor: brand?.primaryColor ?? 'rgba(255,255,255,0.1)'
+            }}
+          >
+            <div className="px-4 py-3 flex items-center gap-3">
+              {/* Logo del Local */}
+              {brand?.logoUrl ? (
+                <img
+                  src={brand.logoUrl}
+                  alt={brand.name}
+                  className="inline-size-10 block-size-10 rounded-full object-cover border border-white/10 flex-shrink-0"
+                />
+              ) : (
+                <div className="flex inline-size-10 block-size-10 items-center justify-center rounded-full bg-gradient-to-br from-purple-600 to-pink-600 text-white text-xs font-bold flex-shrink-0">
+                  {(brand?.name ?? 'SplitPay').substring(0, 2).toUpperCase()}
+                </div>
+              )}
+              
+              {/* Nombre del Local */}
+              <div className="flex-1 min-inline-size-0">
+                <p className="text-[10px] uppercase tracking-widest text-zinc-400 leading-none">
+                  Local
+                </p>
+                <h1 
+                  className="text-sm font-black text-white truncate leading-tight"
+                  style={{ color: brand?.primaryColor ?? '#8b5cf6' }}
+                >
+                  {brand?.name ?? 'SplitPay'}
+                </h1>
               </div>
-            )}
-            
-            {/* Nombre del Local */}
-            <div className="flex-1 min-inline-size-0">
-              <p className="text-[10px] uppercase tracking-widest text-zinc-400 leading-none">
-                Local
-              </p>
-              <h1 
-                className="text-sm font-black text-white truncate leading-tight"
-                style={{ color: brand.primaryColor }}
-              >
-                {brand.name}
-              </h1>
-            </div>
 
-            {/* Indicador de Estado */}
-            {negocio && (
-              <div className="flex-shrink-0 inline-size-2 block-size-2 rounded-full bg-emerald-500 animate-pulse" title="Conectado" />
-            )}
-          </div>
-        </header>
+              {/* Indicador de Estado */}
+              {negocio && (
+                <div className="flex-shrink-0 inline-size-2 block-size-2 rounded-full bg-emerald-500 animate-pulse" title="Conectado" />
+              )}
+            </div>
+          </header>
 
         {/* Contenido Principal - Scrollable */}
         <div className="flex-1 overflow-y-auto">
