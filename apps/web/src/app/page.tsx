@@ -54,8 +54,8 @@ export default async function Home(props: { searchParams: Promise<{ ref?: string
     ? {
         name: negocio.nombre,
         logoUrl: negocio.logo_url,
-        primaryColor: negocio.color_primario ?? '#8b5cf6',
-        secondaryColor: negocio.color_primario ?? '#a1a1aa',
+        primaryColor: negocio.color_principal ?? '#8b5cf6',
+        secondaryColor: negocio.color_principal ?? '#a1a1aa',
       }
     : null;
 

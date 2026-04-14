@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 // Define protected routes
-const protectedRoutes = ['/admin'];
+const protectedRoutes = ['/admin', '/portal'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Check if the current path is explicitly an auth route to skip
+  if (pathname.startsWith('/auth/callback') || pathname.startsWith('/auth/setup-password')) {
+    return NextResponse.next();
+  }
 
   // Check if the current path is protected
   const isProtectedRoute = protectedRoutes.some(route => 
@@ -67,5 +72,5 @@ export async function middleware(request: NextRequest) {
 
 // Configure which routes to run middleware on
 export const config = {
-  matcher: ['/admin/:path*'],
+  matcher: ['/admin/:path*', '/portal/:path*'],
 };
