@@ -32,7 +32,8 @@ export default async function PortalPage() {
     .eq("user_id", session.user.id)
     .single();
 
-  const businessName = userData?.negocios?.nombre || "Tu Restaurante";
+  const negocios = userData?.negocios as unknown as { nombre: string } | null;
+  const businessName = negocios?.nombre || "Tu Restaurante";
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col items-center justify-center px-4 selection:bg-blue-500/30">

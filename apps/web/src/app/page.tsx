@@ -37,7 +37,7 @@ export default async function Home(props: { searchParams: Promise<{ ref?: string
       
       // Fetch banners for this negocio
       const { data: bannerData, error: bannerError } = await supabase
-        .from<BannerRow>('banners')
+        .from('banners')
         .select('*')
         .eq('negocio_id', negocioData.id)
         .eq('activo', true);
