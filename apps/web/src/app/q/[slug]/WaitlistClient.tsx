@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import { Volume2, Loader2 } from "lucide-react";
+import { Volume2, Loader2, AlertTriangle } from "lucide-react";
 import MenuViewer from "./MenuViewer";
 
 type Negocio = {
@@ -75,6 +75,8 @@ export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
       if (data.estado === "esperando") {
         fetchPosition(data.hora_registro);
       }
+    } else {
+      setEstado("cancelado");
     }
   };
 
@@ -107,6 +109,17 @@ export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
           filter: `negocio_id=eq.${negocio.id}`,
         },
         (payload) => {
+          if (payload.eventType === "DELETE") {
+            const oldRecord = payload.old as Record<string, any>;
+            if (oldRecord && oldRecord.id === ticketId) {
+              setEstado("cancelado");
+            }
+            if (horaRegistro) {
+              fetchPosition(horaRegistro);
+            }
+            return;
+          }
+
           const changedRecord = payload.new as Record<string, any>;
 
           if (changedRecord && changedRecord.id === ticketId) {
@@ -185,24 +198,33 @@ export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
     setDelaying(false);
   };
 
+  const handleCancelarReserva = async () => {
+    if (!ticketId) return;
+    const isConfirmed = window.confirm("¿Seguro que deseas cancelar tu lugar en la fila?");
+    if (!isConfirmed) return;
+
+    await supabase
+      .from("lista_espera")
+      .update({ estado: "cancelado" })
+      .eq("id", ticketId);
+
+    handleNuevaReserva();
+  };
+
   // ── Derived state (client-only: uses Date.now()) ─────────────────────────
   const isReady = estado === "sentado" || estado === "listo";
 
   // `tick` se consume explícitamente para garantizar re-render cada 60s.
   void tick; // eslint-disable-line @typescript-eslint/no-unused-expressions
-  const minutosTranscurridos =
-    isMounted && horaRegistro
-      ? Math.floor(
-          (Date.now() -
-            new Date(
-              horaRegistro.endsWith("Z") ? horaRegistro : `${horaRegistro}Z`
-            ).getTime()) /
-            60000
-        )
-      : 0;
-  const baseTime = posicion !== null ? posicion * 8 : null;
-  const estimatedTime =
-    baseTime !== null ? Math.max(1, baseTime - Math.max(0, minutosTranscurridos)) : null;
+  const parseDate = horaRegistro ? new Date(horaRegistro.endsWith("Z") ? horaRegistro : `${horaRegistro}Z`).getTime() : null;
+  const minutosTranscurridos = isMounted && parseDate && !isNaN(parseDate)
+    ? Math.floor((Date.now() - parseDate) / 60000)
+    : 0;
+
+  // Calculo robusto basando el tiempo estimado en 15 min por posición (fallback a 1 si falla)
+  const posCalculada = (typeof posicion === 'number' && !isNaN(posicion) && posicion > 0) ? posicion : 1;
+  const baseTime = posCalculada * 15;
+  const estimatedTime = isMounted ? Math.max(1, baseTime - Math.max(0, minutosTranscurridos)) : null;
 
   // ── Sound alert effects ──────────────────────────────────────────────────
   // Reset alerta sonora si el tiempo vuelve a subir (ej. tras "Ceder lugar")
@@ -339,7 +361,26 @@ export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
               </form>
             ) : (
               <div className="text-center py-6 px-2">
-                {isReady ? (
+                {estado === "cancelado" ? (
+                  <div className="space-y-4">
+                    <div className="w-24 h-24 mx-auto rounded-full flex items-center justify-center bg-red-500/10 border border-red-500/20 shadow-2xl">
+                      <AlertTriangle className="w-12 h-12 text-red-500" />
+                    </div>
+                    <h2 className="text-3xl font-bold text-white tracking-tight mt-8">
+                      Turno Cancelado
+                    </h2>
+                    <span className="text-zinc-300 text-lg leading-relaxed mt-3 block">
+                      Tu turno ha sido cancelado. Por favor, acércate al anfitrión si crees que esto es un error.
+                    </span>
+                    <button
+                      onClick={handleNuevaReserva}
+                      className="w-full mt-6 text-white font-semibold py-4 px-4 rounded-xl hover:opacity-90 active:scale-95 transform transition-all shadow-xl"
+                      style={{ backgroundColor: primaryColor }}
+                    >
+                      Volver al Inicio
+                    </button>
+                  </div>
+                ) : isReady ? (
                   <div className="space-y-4">
                     <div
                       className="w-24 h-24 mx-auto rounded-full flex items-center justify-center animate-bounce shadow-2xl"
@@ -433,6 +474,13 @@ export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
                         supabase={supabase}
                         ticketId={ticketId}
                       />
+
+                      <button
+                        onClick={handleCancelarReserva}
+                        className="mt-6 text-zinc-500 hover:text-zinc-400 text-xs font-medium transition-colors w-full text-center"
+                      >
+                        ¿Ya no deseas esperar? Cancelar reserva
+                      </button>
                     </div>
                   </div>
                 )}

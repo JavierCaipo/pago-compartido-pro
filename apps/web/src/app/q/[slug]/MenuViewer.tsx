@@ -10,6 +10,7 @@ import {
   ShoppingBag,
   Check,
   Sparkles,
+  AlertCircle,
 } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -56,6 +57,7 @@ export default function MenuViewer({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [showErrorToast, setShowErrorToast] = useState(false);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -184,7 +186,15 @@ export default function MenuViewer({
 
   // ── Submit pre-order ─────────────────────────────────────────────────────
   const handleSubmitPreOrder = async () => {
-    if (!ticketId || cart.length === 0) return;
+    if (!ticketId) return;
+
+    if (cart.length === 0) {
+      setShowErrorToast(true);
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setShowErrorToast(false), 3000);
+      return;
+    }
+
     setSaving(true);
 
     const { error } = await supabase
@@ -201,6 +211,28 @@ export default function MenuViewer({
       handleClose();
     }
   };
+
+  // ── Auto-save (Debounce) ──────────────────────────────────────────────────
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    if (!ticketId || cart.length === 0) return;
+
+    const handler = setTimeout(async () => {
+      // Background auto-save without showing loading spinners
+      await supabase
+        .from("lista_espera")
+        .update({ pre_comanda: cart })
+        .eq("id", ticketId);
+    }, 1500);
+
+    return () => clearTimeout(handler);
+  }, [cart, ticketId, supabase]);
 
   // ── Open / Close ─────────────────────────────────────────────────────────
   const handleOpen = () => {
@@ -325,7 +357,21 @@ export default function MenuViewer({
           }}
         >
           <Check className="w-5 h-5" />
-          <span className="text-sm">¡Pre-pedido registrado!</span>
+          <span className="text-sm">¡Platos enviados a cocina!</span>
+        </div>
+      )}
+
+      {/* ── Error Toast ── */}
+      {showErrorToast && (
+        <div
+          className="fixed top-6 left-1/2 -translate-x-1/2 z-[200] flex items-center gap-2.5 bg-red-500 text-white font-semibold px-5 py-3 rounded-2xl shadow-2xl"
+          style={{
+            animation:
+              "menuSlideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
+          }}
+        >
+          <AlertCircle className="w-5 h-5" />
+          <span className="text-sm">Añade platos primero</span>
         </div>
       )}
 
@@ -634,12 +680,12 @@ export default function MenuViewer({
                 </div>
 
                 {/* ── Floating Checkout Bar ── */}
-                {cartCount > 0 && (
-                  <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-zinc-950 via-zinc-950/98 to-transparent pt-8">
+                {cartCount >= 0 && (
+                  <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-zinc-950 via-zinc-950/98 to-transparent pt-8 pointer-events-none">
                     <button
                       onClick={handleSubmitPreOrder}
                       disabled={saving}
-                      className="w-full flex items-center justify-center gap-3 text-white font-semibold py-4 px-6 rounded-2xl hover:opacity-90 hover:scale-[1.01] active:scale-[0.98] transform transition-all shadow-2xl disabled:opacity-60"
+                      className="w-full flex items-center justify-center gap-3 text-white font-semibold py-4 px-6 rounded-2xl hover:opacity-90 hover:scale-[1.01] active:scale-[0.98] transform transition-all shadow-2xl disabled:opacity-60 pointer-events-auto"
                       style={{
                         backgroundColor: primaryColor,
                         boxShadow: `0 12px 32px -4px ${primaryColor}50`,
@@ -653,9 +699,9 @@ export default function MenuViewer({
                       <span>
                         {saving
                           ? "Guardando..."
-                          : `Enviar Pre-pedido (${formatPrice(cartTotal)})`}
+                          : `Confirmar Pre-Pedido (${formatPrice(cartTotal)})`}
                       </span>
-                      {!saving && (
+                      {!saving && cartCount > 0 && (
                         <span className="bg-white/20 text-xs font-bold px-2 py-0.5 rounded-full ml-1">
                           {cartCount}
                         </span>
