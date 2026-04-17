@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { Volume2, Loader2, AlertTriangle } from "lucide-react";
 import MenuViewer from "./MenuViewer";
+import InDiningView from "./InDiningView";
 
 type Negocio = {
   id: string; // Negocio ID, can be treated as string
@@ -212,7 +213,8 @@ export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
   };
 
   // ── Derived state (client-only: uses Date.now()) ─────────────────────────
-  const isReady = estado === "sentado" || estado === "listo";
+  const isReady = estado === "listo";
+  const isSitting = estado === "sentado";
 
   // `tick` se consume explícitamente para garantizar re-render cada 60s.
   void tick; // eslint-disable-line @typescript-eslint/no-unused-expressions
@@ -380,6 +382,13 @@ export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
                       Volver al Inicio
                     </button>
                   </div>
+                ) : isSitting ? (
+                  <InDiningView
+                    ticketId={ticketId}
+                    negocioId={negocio.id}
+                    primaryColor={primaryColor}
+                    supabase={supabase}
+                  />
                 ) : isReady ? (
                   <div className="space-y-4">
                     <div

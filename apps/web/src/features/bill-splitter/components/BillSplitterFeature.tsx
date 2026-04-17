@@ -6,6 +6,8 @@ import { Item, Person } from '../types';
 import ItemAssignmentModal from './ItemAssignmentModal';
 import ReferralCarousel from './ReferralCarousel';
 import { BannerRow } from '../types';
+import { useSearchParams } from 'next/navigation';
+import { createBrowserClient } from '@supabase/ssr';
 
 // --- ICONOS PREMIUM ---
 const Icons = {
@@ -39,7 +41,18 @@ type Brand = {
     secondaryColor?: string;
 };
 
-export default function BillSplitterFeature({ brand, banners }: { brand?: Brand; banners?: BannerRow[] }) {
+export default function BillSplitterFeature(props: { brand?: Brand; banners?: BannerRow[] }) {
+    return (
+        <React.Suspense fallback={<div className="block-size-screen bg-black" />}>
+            <BillSplitterFeatureInner {...props} />
+        </React.Suspense>
+    );
+}
+
+function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?: BannerRow[] }) {
+    const searchParams = useSearchParams();
+    const mesaId = searchParams.get('mesaId');
+
     const [isMounted, setIsMounted] = useState(false);
     const [step, setStep] = useState<'upload' | 'assign' | 'summary'>('upload');
 
@@ -54,7 +67,63 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
     const [modalItem, setModalItem] = useState<Item | null>(null);
     const [buttonText, setButtonText] = useState<string>('Compartir Resultados');
 
-    useEffect(() => setIsMounted(true), []);
+    useEffect(() => {
+        setIsMounted(true);
+        
+        if (!mesaId) {
+            return;
+        }
+
+        const fetchMesaItems = async () => {
+            setIsLoading(true);
+            try {
+                const supabase = createBrowserClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                );
+                
+                const { data: comandas, error } = await supabase
+                    .from("comandas")
+                    .select("*, comanda_items(*)")
+                    .eq("mesa_id", mesaId)
+                    .in("estado", ["preparando", "listo", "pendiente"]);
+                
+                if (error) throw error;
+                
+                let loadedItems: any[] = [];
+                if (comandas && comandas.length > 0) {
+                    comandas.forEach(c => {
+                        if (c.comanda_items) {
+                            loadedItems = [...loadedItems, ...c.comanda_items];
+                        }
+                    });
+                }
+                
+                if (loadedItems.length > 0) {
+                    const mappedItems = loadedItems.map((item, idx) => {
+                        const rowTotal = item.subtotal ? Number(item.subtotal) : (item.precio * item.cantidad);
+                        return {
+                            id: idx,
+                            name: item.cantidad > 1 ? `${item.cantidad}x ${item.nombre}` : item.nombre,
+                            price: rowTotal,
+                            quantity: 1,
+                            assignments: []
+                        };
+                    });
+                    
+                    setItems(mappedItems);
+                    setStep('assign');
+                }
+            } catch (e) {
+                console.error(e);
+                setError("Error al cargar la cuenta de la mesa.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchMesaItems();
+    }, [mesaId]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawFile = e.target.files?.[0];
