@@ -30,6 +30,35 @@ export default function InDiningView({
     fetchComanda();
   }, [ticketId]);
 
+  useEffect(() => {
+    if (!mesaId) return;
+
+    const channel = supabase
+      .channel(`mesa_status_${mesaId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "mesas",
+          filter: `id=eq.${mesaId}`,
+        },
+        (payload) => {
+          const newRecord = payload.new as Record<string, any>;
+          if (newRecord.estado === "disponible") {
+            localStorage.removeItem(`ticket_${negocioId}`);
+            localStorage.removeItem(`mesa_${negocioId}`);
+            window.location.href = "/gracias";
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [mesaId, negocioId, supabase]);
+
   const fetchComanda = async () => {
     // 1. Buscar la información base en lista_espera (Fallback a pre_comanda)
     const { data: lista } = await supabase
