@@ -5,7 +5,7 @@ export type NegocioRow = {
   slug: string;
   nombre: string;
   logo_url?: string;
-  color_primario?: string;
+  color_principal?: string;
 };
 
 export function getSupabaseClient(): SupabaseClient | null {

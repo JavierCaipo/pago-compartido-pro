@@ -6,6 +6,8 @@ import { Item, Person } from '../types';
 import ItemAssignmentModal from './ItemAssignmentModal';
 import ReferralCarousel from './ReferralCarousel';
 import { BannerRow } from '../types';
+import { useSearchParams } from 'next/navigation';
+import { createBrowserClient } from '@supabase/ssr';
 
 // --- ICONOS PREMIUM ---
 const Icons = {
@@ -39,7 +41,19 @@ type Brand = {
     secondaryColor?: string;
 };
 
-export default function BillSplitterFeature({ brand, banners }: { brand?: Brand; banners?: BannerRow[] }) {
+export default function BillSplitterFeature(props: { brand?: Brand; banners?: BannerRow[] }) {
+    return (
+        <React.Suspense fallback={<div className="block-size-screen bg-black" />}>
+            <BillSplitterFeatureInner {...props} />
+        </React.Suspense>
+    );
+}
+
+function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?: BannerRow[] }) {
+    const searchParams = useSearchParams();
+    const mesaId = searchParams.get('mesaId');
+    const ticketId = searchParams.get('ticketId');
+
     const [isMounted, setIsMounted] = useState(false);
     const [step, setStep] = useState<'upload' | 'assign' | 'summary'>('upload');
 
@@ -54,7 +68,112 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
     const [modalItem, setModalItem] = useState<Item | null>(null);
     const [buttonText, setButtonText] = useState<string>('Compartir Resultados');
 
-    useEffect(() => setIsMounted(true), []);
+    const [processingPayment, setProcessingPayment] = useState<number | 'ALL' | null>(null);
+    const [paidPersons, setPaidPersons] = useState<number[]>([]);
+    const [isFullyPaid, setIsFullyPaid] = useState(false);
+    const [liberating, setLiberating] = useState(false);
+
+    const handlePayment = async (id: number | 'ALL') => {
+        setProcessingPayment(id);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        setProcessingPayment(null);
+        
+        if (id === 'ALL') {
+            const allIds = people.map(p => p.id);
+            setPaidPersons(allIds);
+        } else {
+            setPaidPersons(prev => Array.from(new Set([...prev, id])));
+        }
+    };
+
+    useEffect(() => {
+        setIsMounted(true);
+        
+        if (!mesaId) {
+            return;
+        }
+
+        const fetchMesaItems = async () => {
+            setIsLoading(true);
+            try {
+                const supabase = createBrowserClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                );
+                
+                // 1. Intentar cargar desde comandas
+                const { data: comandas, error: comandaError } = await supabase
+                    .from("comandas")
+                    .select("*, comanda_items(*, productos(nombre))")
+                    .eq("mesa_id", mesaId)
+                    .in("estado", ["preparando", "listo", "servido"]);
+                
+                if (comandaError) throw comandaError;
+                
+                let loadedItems: any[] = [];
+                if (comandas && comandas.length > 0) {
+                    comandas.forEach(c => {
+                        if (c.comanda_items) {
+                            loadedItems = [...loadedItems, ...c.comanda_items];
+                        }
+                    });
+                }
+                
+                // 2. Fallback Agresivo: Si no hay comandas, buscar en lista_espera (pre_comanda)
+                if (loadedItems.length === 0) {
+                    let query = supabase.from("lista_espera").select("pre_comanda");
+                    
+                    if (ticketId) {
+                        query = query.eq("id", ticketId);
+                    } else {
+                        query = query.eq("mesa_id", mesaId).eq("estado", "sentado");
+                    }
+                    
+                    const { data: waitlistData } = await query.maybeSingle();
+                    const preComandaItems = waitlistData?.pre_comanda?.items;
+                    
+                    if (Array.isArray(preComandaItems) && preComandaItems.length > 0) {
+                        const mappedItems = preComandaItems.map((item: any) => ({
+                            id: item.id || crypto.randomUUID(),
+                            name: item.nombre || 'Producto',
+                            price: Number(item.precio || item.precio_unitario || 0),
+                            quantity: Number(item.cantidad || 1),
+                            assignments: []
+                        }));
+                        
+                        setItems(mappedItems);
+                        setStep('assign');
+                        return;
+                    }
+                }
+                
+                if (loadedItems.length > 0) {
+                    const mappedItems = loadedItems.map((item, idx) => {
+                        const rowTotal = Number(item.subtotal) || (Number(item.precio) * Number(item.cantidad)) || 0;
+                        const originalName = item.productos?.nombre || 'Producto';
+                        const itemName = item.cantidad > 1 ? `${item.cantidad}x ${originalName}` : originalName;
+                        return {
+                            id: item.id || idx,
+                            name: itemName,
+                            price: rowTotal,
+                            quantity: 1, // En SplitPay tratamos el total por fila como 1 unidad de ese "paquete"
+                            assignments: []
+                        };
+                    });
+                    
+                    setItems(mappedItems);
+                    setStep('assign');
+                }
+            } catch (e) {
+                console.error(e);
+                setError("Error al cargar la cuenta de la mesa.");
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchMesaItems();
+    }, [mesaId, ticketId]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawFile = e.target.files?.[0];
@@ -200,7 +319,58 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
         return { map, totalBill, unassigned };
     }, [items, people]);
 
+    useEffect(() => {
+        if (!mesaId || isFullyPaid) return;
+        
+        let totalPaid = 0;
+        paidPersons.forEach(pid => {
+            totalPaid += totals.map.get(pid) || 0;
+        });
+
+        if (totalPaid > 0 && totalPaid >= totals.totalBill - 0.05) {
+            const releaseMesa = async () => {
+                setLiberating(true);
+                try {
+                    const supabase = createBrowserClient(
+                        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+                    );
+                    await supabase.rpc('cerrar_mesa_y_liberar', { p_mesa_id: mesaId });
+                } catch (e) {
+                    console.error("Error al cerrar mesa", e);
+                } finally {
+                    setIsFullyPaid(true);
+                    setLiberating(false);
+                }
+            };
+            releaseMesa();
+        }
+    }, [paidPersons, totals, mesaId, isFullyPaid]);
+
     if (!isMounted) return <div className="block-size-screen bg-black" />;
+
+    if (liberating) {
+        return (
+            <div className="w-full max-w-md mx-auto min-h-[100dvh] flex flex-col bg-black text-white justify-center items-center px-6">
+                <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-6"></div>
+                <h2 className="text-2xl font-bold">Cerrando mesa...</h2>
+                <p className="text-zinc-500 mt-2">Por favor no cierres esta ventana</p>
+            </div>
+        );
+    }
+
+    if (isFullyPaid) {
+        return (
+            <div className="w-full max-w-md mx-auto min-h-[100dvh] flex flex-col bg-black text-white justify-center items-center px-6 relative">
+                 <div className="fixed inset-block-start-[-20%] inset-inline-start-[-10%] inline-size-[500px] block-size-[500px] bg-emerald-900/20 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+                 <div className="w-24 h-24 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex justify-center items-center mb-8 shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)]">
+                     <svg className="w-12 h-12 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                 </div>
+                 <h1 className="text-4xl font-black tracking-tighter mb-4 text-center">¡Cuenta liquidada!</h1>
+                 <p className="text-zinc-400 text-lg text-center mb-8">Gracias por su visita. ¡Los esperamos pronto!</p>
+            </div>
+        );
+    }
 
     return (
         <div className="w-full max-w-md mx-auto min-h-[100dvh] flex flex-col bg-black text-white font-sans selection:bg-purple-500/30 relative pb-20 pt-12">
@@ -385,6 +555,15 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                             <h2 className="text-6xl font-black text-white tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-400">
                                 ${currency}{totals.totalBill.toFixed(2)}
                             </h2>
+                            {mesaId && paidPersons.length === 0 && totals.totalBill > 0 && (
+                                <button
+                                    onClick={() => handlePayment('ALL')}
+                                    disabled={processingPayment !== null}
+                                    className="mt-5 mx-auto bg-white text-black font-bold py-2.5 px-6 rounded-full shadow-xl hover:scale-105 transition-transform flex items-center gap-2"
+                                >
+                                    {processingPayment === 'ALL' ? <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" /> : "Pagar Cuenta Completa"}
+                                </button>
+                            )}
                         </div>
 
                         {(!brand || !brand.logoUrl || brand.name?.toLowerCase() === 'splitpay') && storeName && (
@@ -437,6 +616,24 @@ export default function BillSplitterFeature({ brand, banners }: { brand?: Brand;
                                                 </div>
                                             </div>
                                         )}
+                                        
+                                        <div className="mt-4 pt-4 border-t border-zinc-800/80">
+                                            {paidPersons.includes(p.id) ? (
+                                                <div className="flex justify-center items-center gap-2 text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/20 py-2.5 rounded-xl">
+                                                    <Icons.Check /> ¡Pagado!
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    onClick={() => handlePayment(p.id)}
+                                                    disabled={processingPayment !== null}
+                                                    className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-2.5 rounded-xl flex justify-center items-center gap-2 shadow-lg disabled:opacity-50"
+                                                >
+                                                    {processingPayment === p.id 
+                                                        ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> 
+                                                        : "Pagar Mi Parte"}
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 )
                             })}

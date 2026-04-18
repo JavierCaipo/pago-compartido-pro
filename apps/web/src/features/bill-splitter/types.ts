@@ -1,6 +1,6 @@
 
 export interface Item {
-  id: number;
+  id: number | string;
   name: string;
   price: number;
   quantity?: number; // Cantidad total del ítem (ej. 3 Chicharrones), por defecto 1

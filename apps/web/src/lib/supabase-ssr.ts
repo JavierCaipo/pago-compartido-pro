@@ -10,8 +10,7 @@ export function createClient() {
 export function createServerClientInstance(
   cookieStore: {
     getAll(): Array<{ name: string; value: string }>;
-    setCookie(name: string, value: string, options: any): void;
-    deleteCookie(name: string): void;
+    set(name: string, value: string, options: Record<string, unknown>): void;
   }
 ) {
   return createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -19,18 +18,13 @@ export function createServerClientInstance(
       getAll() {
         return cookieStore.getAll();
       },
-      setCookie(name, value, options) {
+      setAll(cookiesToSet) {
         try {
-          cookieStore.setCookie(name, value, { ...options, sameSite: 'Lax', secure: true });
-        } catch (error) {
-          // Handle server-side cookie setting
-        }
-      },
-      removeCookie(name, options) {
-        try {
-          cookieStore.deleteCookie(name);
-        } catch (error) {
-          // Handle server-side cookie deletion
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, { ...options, sameSite: 'Lax', secure: true })
+          );
+        } catch {
+          // Server Components can't set cookies — safe to ignore.
         }
       },
     },
