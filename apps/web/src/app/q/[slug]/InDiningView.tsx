@@ -74,36 +74,44 @@ export default function InDiningView({
     if (fetchedMesaId) {
       setMesaId(fetchedMesaId);
       
-      // 2. Fetch limpio de comandas sin JOINs conflictivos
+      // 2. Fetch limpio de comandas
       const { data: comandas } = await supabase
         .from("comandas")
-        .select("*, comanda_items(*)")
+        .select("*, comanda_items(*, productos(nombre))")
         .eq("mesa_id", fetchedMesaId)
-        .in("estado", ["preparando", "listo", "pendiente"]);
+        .in("estado", ["preparando", "listo", "servido"])
+        .order("created_at", { ascending: false });
         
       if (comandas && comandas.length > 0) {
         comandas.forEach(c => {
            if (c.comanda_items) {
-             loadedItems = [...loadedItems, ...c.comanda_items];
+             const normalized = c.comanda_items.map((item: any) => ({
+               ...item,
+               nombre: item.productos?.nombre || item.nombre || 'Producto'
+             }));
+             loadedItems = [...loadedItems, ...normalized];
            }
         });
         setComanda(comandas[0]); 
-      } else if (lista?.pre_comanda?.items) {
-        loadedItems = lista.pre_comanda.items;
-        pendingStatus = true;
       }
-    } else if (lista?.pre_comanda?.items) {
-      loadedItems = lista.pre_comanda.items;
+    }
+
+    // Fallback Agresivo: Si no hay items de comandas, usar pre_comanda
+    if (loadedItems.length === 0 && lista?.pre_comanda?.items) {
+      loadedItems = lista.pre_comanda.items.map((item: any) => ({
+        ...item,
+        nombre: item.nombre || 'Producto'
+      }));
       pendingStatus = true;
     }
 
     setItems(loadedItems);
     setIsPending(pendingStatus);
     
-    // Calcular total de manera segura (subtotal de bd o cant * precio del json)
+    // Calcular total de manera segura
     const calcTotal = loadedItems.reduce((acc: number, item: any) => {
-      const price = item.precio || 0;
-      const amount = item.cantidad || 1;
+      const price = Number(item.precio || item.precio_unitario || 0);
+      const amount = Number(item.cantidad || 1);
       if (item.subtotal) return acc + Number(item.subtotal);
       return acc + (price * amount);
     }, 0);
@@ -118,9 +126,15 @@ export default function InDiningView({
       return;
     }
     setPedirCuentaLoad(true);
-    await supabase.from("mesas").update({ requiere_cuenta: true }).eq("id", mesaId);
-    setPedirCuentaLoad(false);
-    alert("El mozo ha sido notificado para llevar la cuenta.");
+    try {
+      // Usar RPC para evitar errores de RLS y parpadeos
+      await supabase.rpc('marcar_requiere_cuenta', { p_mesa_id: mesaId });
+      alert("El mozo ha sido notificado para llevar la cuenta.");
+    } catch (err) {
+      console.error("Error al pedir cuenta:", err);
+    } finally {
+      setPedirCuentaLoad(false);
+    }
   };
 
   const handleDividirCuenta = () => {
@@ -129,7 +143,8 @@ export default function InDiningView({
       return;
     }
     const slug = window.location.pathname.split("/").pop();
-    window.location.href = `/?ref=${slug}&mesaId=${mesaId}&checkout=true`;
+    // Pasar ref=slug y ticketId para que BillSplitterFeature pueda hacer fallback a pre_comanda si es necesario
+    window.location.href = `/?ref=${slug}&mesaId=${mesaId}&ticketId=${ticketId}&checkout=true`;
   };
 
   if (loading) {
@@ -141,9 +156,24 @@ export default function InDiningView({
     );
   }
 
+  let statusMessage = "";
+  if (comanda) {
+    if (comanda.estado === "preparando") statusMessage = "Tus platos se están preparando con cariño.";
+    else if (comanda.estado === "listo") statusMessage = "¡Tus platos van en camino a la mesa!";
+    else if (comanda.estado === "servido") statusMessage = "¡Buen provecho! 🍽️";
+    else if (comanda.estado === "pendiente") statusMessage = "Esperando confirmación de la cocina...";
+  }
+
   return (
     <div className="space-y-6 pb-2 text-left w-full mt-4">
-      <h2 className="text-2xl font-bold text-white mb-2 text-center">Tu Mesa</h2>
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-white mb-2">Tu Mesa</h2>
+        {statusMessage && (
+          <span className="inline-block px-4 py-1.5 mt-2 bg-gradient-to-r from-zinc-900 to-zinc-950 border border-zinc-800/80 rounded-full text-xs text-zinc-300 font-medium shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-500">
+            {statusMessage}
+          </span>
+        )}
+      </div>
 
       <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 shadow-inner">
         <h3 className="text-lg font-semibold text-white mb-4 flex items-center justify-between">

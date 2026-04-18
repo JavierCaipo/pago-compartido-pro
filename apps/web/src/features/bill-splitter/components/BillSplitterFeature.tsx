@@ -52,6 +52,7 @@ export default function BillSplitterFeature(props: { brand?: Brand; banners?: Ba
 function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?: BannerRow[] }) {
     const searchParams = useSearchParams();
     const mesaId = searchParams.get('mesaId');
+    const ticketId = searchParams.get('ticketId');
 
     const [isMounted, setIsMounted] = useState(false);
     const [step, setStep] = useState<'upload' | 'assign' | 'summary'>('upload');
@@ -100,13 +101,14 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
                     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
                 );
                 
-                const { data: comandas, error } = await supabase
+                // 1. Intentar cargar desde comandas
+                const { data: comandas, error: comandaError } = await supabase
                     .from("comandas")
-                    .select("*, comanda_items(*)")
+                    .select("*, comanda_items(*, productos(nombre))")
                     .eq("mesa_id", mesaId)
-                    .in("estado", ["preparando", "listo", "pendiente"]);
+                    .in("estado", ["preparando", "listo", "servido"]);
                 
-                if (error) throw error;
+                if (comandaError) throw comandaError;
                 
                 let loadedItems: any[] = [];
                 if (comandas && comandas.length > 0) {
@@ -117,14 +119,44 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
                     });
                 }
                 
+                // 2. Fallback Agresivo: Si no hay comandas, buscar en lista_espera (pre_comanda)
+                if (loadedItems.length === 0) {
+                    let query = supabase.from("lista_espera").select("pre_comanda");
+                    
+                    if (ticketId) {
+                        query = query.eq("id", ticketId);
+                    } else {
+                        query = query.eq("mesa_id", mesaId).eq("estado", "sentado");
+                    }
+                    
+                    const { data: waitlistData } = await query.maybeSingle();
+                    const preComandaItems = waitlistData?.pre_comanda?.items;
+                    
+                    if (Array.isArray(preComandaItems) && preComandaItems.length > 0) {
+                        const mappedItems = preComandaItems.map((item: any) => ({
+                            id: item.id || crypto.randomUUID(),
+                            name: item.nombre || 'Producto',
+                            price: Number(item.precio || item.precio_unitario || 0),
+                            quantity: Number(item.cantidad || 1),
+                            assignments: []
+                        }));
+                        
+                        setItems(mappedItems);
+                        setStep('assign');
+                        return;
+                    }
+                }
+                
                 if (loadedItems.length > 0) {
                     const mappedItems = loadedItems.map((item, idx) => {
-                        const rowTotal = item.subtotal ? Number(item.subtotal) : (item.precio * item.cantidad);
+                        const rowTotal = Number(item.subtotal) || (Number(item.precio) * Number(item.cantidad)) || 0;
+                        const originalName = item.productos?.nombre || 'Producto';
+                        const itemName = item.cantidad > 1 ? `${item.cantidad}x ${originalName}` : originalName;
                         return {
-                            id: idx,
-                            name: item.cantidad > 1 ? `${item.cantidad}x ${item.nombre}` : item.nombre,
+                            id: item.id || idx,
+                            name: itemName,
                             price: rowTotal,
-                            quantity: 1,
+                            quantity: 1, // En SplitPay tratamos el total por fila como 1 unidad de ese "paquete"
                             assignments: []
                         };
                     });
@@ -141,7 +173,7 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
         };
 
         fetchMesaItems();
-    }, [mesaId]);
+    }, [mesaId, ticketId]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const rawFile = e.target.files?.[0];

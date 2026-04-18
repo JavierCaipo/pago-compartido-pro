@@ -5,9 +5,12 @@ import WaitlistClient from './WaitlistClient';
 
 export const dynamic = 'force-dynamic';
 
-export default async function WaitlistPage(props: { params: Promise<{ slug: string }> }) {
-  const params = await props.params;
-  const slug = params.slug;
+export default async function WaitlistPage(props: { 
+  params: Promise<{ slug: string }>,
+  searchParams: Promise<{ mesaId?: string }> 
+}) {
+  const { slug } = await props.params;
+  const { mesaId } = await props.searchParams;
 
   const cookieStore = await cookies();
   const supabase = createServerClient(
@@ -31,5 +34,5 @@ export default async function WaitlistPage(props: { params: Promise<{ slug: stri
     return notFound();
   }
 
-  return <WaitlistClient negocio={negocio} />;
+  return <WaitlistClient negocio={negocio} mesaId={mesaId} />;
 }

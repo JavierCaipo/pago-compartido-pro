@@ -13,7 +13,7 @@ type Negocio = {
   color_principal: string | null;
 };
 
-export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
+export default function WaitlistClient({ negocio, mesaId }: { negocio: Negocio; mesaId?: string }) {
   const primaryColor = negocio.color_principal || "#8b5cf6";
 
   // ── Hydration guard ──────────────────────────────────────────────────────
@@ -47,6 +47,10 @@ export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
   useEffect(() => {
     setIsMounted(true);
 
+    if (mesaId) {
+      localStorage.setItem(`mesa_${negocio.id}`, mesaId);
+    }
+
     // Restaurar el ticket del usuario en el navegador para este negocio
     const savedTicket = localStorage.getItem(`ticket_${negocio.id}`);
     if (savedTicket) {
@@ -54,7 +58,7 @@ export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
       fetchTicketStatus(savedTicket);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [negocio.id]);
+  }, [negocio.id, mesaId]);
 
   // ── Marcapasos: fuerza re-render cada 60s para que Date.now() se recalcule ──
   useEffect(() => {
@@ -125,6 +129,11 @@ export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
 
           if (changedRecord && changedRecord.id === ticketId) {
             setEstado(changedRecord.estado);
+            if (changedRecord.estado === 'finalizado') {
+              localStorage.removeItem(`ticket_${negocio.id}`);
+              // mesa_${negocio.id} is managed in InDiningView usually, but better be safe
+              localStorage.removeItem(`mesa_${negocio.id}`);
+            }
           }
 
           if (horaRegistro) {
@@ -313,7 +322,32 @@ export default function WaitlistClient({ negocio }: { negocio: Negocio }) {
 
           {/* Vista Condicional: Formulario vs Rastreador */}
           <div className="relative z-10 w-full">
-            {!ticketId ? (
+            {estado === "finalizado" ? (
+               <div className="text-center py-12 px-4 animate-in fade-in zoom-in duration-500">
+                 <div className="w-24 h-24 mx-auto rounded-full bg-emerald-500/20 border border-emerald-500/30 flex justify-center items-center mb-8 shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)]">
+                    <svg className="w-12 h-12 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                 </div>
+                 <h1 className="text-3xl font-black tracking-tighter mb-4 text-white">¡Gracias por tu visita!</h1>
+                 <p className="text-zinc-400 text-lg leading-relaxed mb-8">
+                   Tu mesa ha sido cerrada. Esperamos verte pronto en {negocio.nombre}.
+                 </p>
+                 <button 
+                  onClick={() => {
+                    localStorage.removeItem(`ticket_${negocio.id}`);
+                    localStorage.removeItem(`mesa_${negocio.id}`);
+                    localStorage.removeItem('ticketId');
+                    localStorage.removeItem('mesaId');
+                    setTicketId(null);
+                    setEstado(null);
+                    window.location.href = window.location.pathname + window.location.search;
+                  }}
+                  className="w-full py-4 px-4 rounded-xl text-white font-semibold transition-all hover:scale-[1.02] active:scale-95 shadow-xl"
+                  style={{ backgroundColor: primaryColor }}
+                 >
+                   Volver al Inicio
+                 </button>
+               </div>
+            ) : !ticketId ? (
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium text-zinc-300 mb-2">Tu Nombre</label>
