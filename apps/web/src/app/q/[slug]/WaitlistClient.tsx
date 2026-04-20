@@ -51,6 +51,16 @@ export default function WaitlistClient({ negocio, mesaId }: { negocio: Negocio; 
       localStorage.setItem(`mesa_${negocio.id}`, mesaId);
     }
 
+    // Registrar Service Worker para notificaciones en segundo plano
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(err => console.warn("SW register failed:", err));
+    }
+
+    // Solicitar permiso para notificaciones
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+
     // Restaurar el ticket del usuario en el navegador para este negocio
     const savedTicket = localStorage.getItem(`ticket_${negocio.id}`);
     if (savedTicket) {
@@ -174,6 +184,11 @@ export default function WaitlistClient({ negocio, mesaId }: { negocio: Negocio; 
       setHoraRegistro(data.hora_registro);
       fetchPosition(data.hora_registro);
       localStorage.setItem(`ticket_${negocio.id}`, newTicketId);
+
+      // Re-solicitar permiso al interactuar (gesto de usuario)
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
     }
 
     setLoading(false);
@@ -257,6 +272,33 @@ export default function WaitlistClient({ negocio, mesaId }: { negocio: Negocio; 
       setHasPlayedAlert(true);
     }
   }, [estimatedTime, hasPlayedAlert]);
+
+  // ── Alerta Mesa Lista (Estado: 'listo' | 'sentado') ───────────────────────
+  useEffect(() => {
+    if ((isReady || isSitting) && isMounted) {
+      // 1. Sonido de altar prioridad
+      try {
+        const audio = new Audio("/notification.mp3");
+        audio.volume = 1.0;
+        audio.play().catch(e => console.warn("Audio listo bloqueado:", e));
+      } catch (err) {}
+
+      // 2. Notificación de Sistema (Push Visual)
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("¡Tu mesa está lista! 🍽️", {
+          body: `Por favor, acércate a la recepción de ${negocio.nombre}.`,
+          icon: negocio.logo_url || "/favicon.ico",
+          vibrate: [200, 100, 200],
+          tag: 'mesa-lista'
+        });
+      }
+
+      // 3. Modal de Bloqueo / Alert persistente
+      if (isReady) {
+        alert("¡TU MESA ESTÁ LISTA! 🍽️\n\nPor favor, acércate a la anfitriona para que te acompañe a tu lugar.");
+      }
+    }
+  }, [isReady, isSitting, isMounted, negocio.nombre, negocio.logo_url]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RENDER
