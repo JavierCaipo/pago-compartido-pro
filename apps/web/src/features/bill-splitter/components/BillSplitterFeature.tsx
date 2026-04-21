@@ -6,7 +6,7 @@ import { Item, Person } from '../types';
 import ItemAssignmentModal from './ItemAssignmentModal';
 import ReferralCarousel from './ReferralCarousel';
 import { BannerRow } from '../types';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
 // --- ICONOS PREMIUM ---
@@ -51,6 +51,7 @@ export default function BillSplitterFeature(props: { brand?: Brand; banners?: Ba
 
 function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?: BannerRow[] }) {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const mesaId = searchParams.get('mesaId');
     const ticketId = searchParams.get('ticketId');
 
@@ -347,6 +348,12 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
         }
     }, [paidPersons, totals, mesaId, isFullyPaid]);
 
+    useEffect(() => {
+        if (isFullyPaid) {
+            router.push('/gracias');
+        }
+    }, [isFullyPaid, router]);
+
     if (!isMounted) return <div className="block-size-screen bg-black" />;
 
     if (liberating) {
@@ -355,19 +362,6 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
                 <div className="w-16 h-16 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-6"></div>
                 <h2 className="text-2xl font-bold">Cerrando mesa...</h2>
                 <p className="text-zinc-500 mt-2">Por favor no cierres esta ventana</p>
-            </div>
-        );
-    }
-
-    if (isFullyPaid) {
-        return (
-            <div className="w-full max-w-md mx-auto min-h-[100dvh] flex flex-col bg-black text-white justify-center items-center px-6 relative">
-                 <div className="fixed inset-block-start-[-20%] inset-inline-start-[-10%] inline-size-[500px] block-size-[500px] bg-emerald-900/20 rounded-full blur-[120px] pointer-events-none -z-10"></div>
-                 <div className="w-24 h-24 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex justify-center items-center mb-8 shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)]">
-                     <svg className="w-12 h-12 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                 </div>
-                 <h1 className="text-4xl font-black tracking-tighter mb-4 text-center">¡Cuenta liquidada!</h1>
-                 <p className="text-zinc-400 text-lg text-center mb-8">Gracias por su visita. ¡Los esperamos pronto!</p>
             </div>
         );
     }

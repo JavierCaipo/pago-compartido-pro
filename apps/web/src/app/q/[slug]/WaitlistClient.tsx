@@ -281,13 +281,14 @@ export default function WaitlistClient({ negocio, mesaId }: { negocio: Negocio; 
         const audio = new Audio("/notification.mp3");
         audio.volume = 1.0;
         audio.play().catch(e => console.warn("Audio listo bloqueado:", e));
-      } catch (err) {}
+      } catch (err) { }
 
       // 2. Notificación de Sistema (Push Visual)
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification("¡Tu mesa está lista! 🍽️", {
           body: `Por favor, acércate a la recepción de ${negocio.nombre}.`,
           icon: negocio.logo_url || "/favicon.ico",
+          // @ts-ignore
           vibrate: [200, 100, 200],
           tag: 'mesa-lista'
         });
@@ -365,15 +366,15 @@ export default function WaitlistClient({ negocio, mesaId }: { negocio: Negocio; 
           {/* Vista Condicional: Formulario vs Rastreador */}
           <div className="relative z-10 w-full">
             {estado === "finalizado" ? (
-               <div className="text-center py-12 px-4 animate-in fade-in zoom-in duration-500">
-                 <div className="w-24 h-24 mx-auto rounded-full bg-emerald-500/20 border border-emerald-500/30 flex justify-center items-center mb-8 shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)]">
-                    <svg className="w-12 h-12 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                 </div>
-                 <h1 className="text-3xl font-black tracking-tighter mb-4 text-white">¡Gracias por tu visita!</h1>
-                 <p className="text-zinc-400 text-lg leading-relaxed mb-8">
-                   Tu mesa ha sido cerrada. Esperamos verte pronto en {negocio.nombre}.
-                 </p>
-                 <button 
+              <div className="text-center py-12 px-4 animate-in fade-in zoom-in duration-500">
+                <div className="w-24 h-24 mx-auto rounded-full bg-emerald-500/20 border border-emerald-500/30 flex justify-center items-center mb-8 shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)]">
+                  <svg className="w-12 h-12 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                </div>
+                <h1 className="text-3xl font-black tracking-tighter mb-4 text-white">¡Gracias por tu visita!</h1>
+                <p className="text-zinc-400 text-lg leading-relaxed mb-8">
+                  Tu mesa ha sido cerrada. Esperamos verte pronto en {negocio.nombre}.
+                </p>
+                <button
                   onClick={() => {
                     localStorage.removeItem(`ticket_${negocio.id}`);
                     localStorage.removeItem(`mesa_${negocio.id}`);
@@ -385,10 +386,10 @@ export default function WaitlistClient({ negocio, mesaId }: { negocio: Negocio; 
                   }}
                   className="w-full py-4 px-4 rounded-xl text-white font-semibold transition-all hover:scale-[1.02] active:scale-95 shadow-xl"
                   style={{ backgroundColor: primaryColor }}
-                 >
-                   Volver al Inicio
-                 </button>
-               </div>
+                >
+                  Volver al Inicio
+                </button>
+              </div>
             ) : !ticketId ? (
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div>
