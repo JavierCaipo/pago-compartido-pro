@@ -107,8 +107,8 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
             return;
         }
 
-        const fetchMesaItems = async () => {
-            setIsLoading(true);
+        const fetchMesaItems = async (silent = false) => {
+            if (!silent) setIsLoading(true);
             try {
                 const supabase = createBrowserClient(
                     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -148,35 +148,43 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
                     const preComandaItems = waitlistData?.pre_comanda?.items;
                     
                     if (Array.isArray(preComandaItems) && preComandaItems.length > 0) {
-                        const mappedItems = preComandaItems.map((item: any) => ({
-                            id: item.id || crypto.randomUUID(),
-                            name: item.nombre || 'Producto',
-                            price: Number(item.precio || item.precio_unitario || 0),
-                            quantity: Number(item.cantidad || 1),
-                            assignments: []
-                        }));
-                        
-                        setItems(mappedItems);
+                        setItems(prevItems => {
+                            return preComandaItems.map((item: any) => {
+                                const id = item.id || crypto.randomUUID();
+                                const existing = prevItems.find(p => p.id === id);
+                                return {
+                                    id: id,
+                                    name: item.nombre || 'Producto',
+                                    price: Number(item.precio || item.precio_unitario || 0),
+                                    quantity: Number(item.cantidad || 1),
+                                    assignments: existing ? existing.assignments : []
+                                };
+                            });
+                        });
                         setStep('assign');
                         return;
                     }
                 }
                 
                 if (loadedItems.length > 0) {
-                    const mappedItems = loadedItems.map((item, idx) => {
-                        const rowTotal = Number(item.subtotal) || (Number(item.precio) * Number(item.cantidad)) || 0;
-                        const originalName = item.productos?.nombre || 'Producto';
-                        const itemName = item.cantidad > 1 ? `${item.cantidad}x ${originalName}` : originalName;
-                        return {
-                            id: item.id || idx,
-                            name: itemName,
-                            price: rowTotal,
-                            quantity: 1, // En SplitPay tratamos el total por fila como 1 unidad de ese "paquete"
-                            assignments: []
-                        };
+                    setItems(prevItems => {
+                        return loadedItems.map((item, idx) => {
+                            const id = item.id || idx;
+                            const existing = prevItems.find(p => p.id === id);
+
+                            const rowTotal = Number(item.subtotal) || (Number(item.precio) * Number(item.cantidad)) || 0;
+                            const originalName = item.productos?.nombre || 'Producto';
+                            const itemName = item.cantidad > 1 ? `${item.cantidad}x ${originalName}` : originalName;
+
+                            return {
+                                id: id,
+                                name: itemName,
+                                price: rowTotal,
+                                quantity: 1,
+                                assignments: existing ? existing.assignments : []
+                            };
+                        });
                     });
-                    
-                    setItems(mappedItems);
                     setStep('assign');
                 }
             } catch (e) {
@@ -187,7 +195,30 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
             }
         };
 
+        const supabase = createBrowserClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
+
+        const channel = supabase
+            .channel(`continuous_ordering_${mesaId}`)
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "comandas", filter: `mesa_id=eq.${mesaId}` },
+                () => fetchMesaItems(true)
+            )
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "comanda_items" },
+                () => fetchMesaItems(true)
+            )
+            .subscribe();
+
         fetchMesaItems();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [mesaId, ticketId]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

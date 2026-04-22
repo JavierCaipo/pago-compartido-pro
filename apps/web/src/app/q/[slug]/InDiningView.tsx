@@ -66,6 +66,29 @@ export default function InDiningView({
           }
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comandas",
+          filter: `mesa_id=eq.${mesaId}`,
+        },
+        () => {
+          fetchComanda(true); // silent fetch
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "comanda_items",
+        },
+        () => {
+          fetchComanda(true); // silent fetch
+        }
+      )
       .subscribe();
 
     return () => {
@@ -73,7 +96,8 @@ export default function InDiningView({
     };
   }, [mesaId, negocioId, supabase]);
 
-  const fetchComanda = async () => {
+  const fetchComanda = async (silent = false) => {
+    if (!silent) setLoading(true);
     // 1. Buscar la información base en lista_espera (Fallback a pre_comanda)
     const { data: lista } = await supabase
       .from("lista_espera")
