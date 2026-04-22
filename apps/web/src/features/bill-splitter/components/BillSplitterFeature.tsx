@@ -39,6 +39,7 @@ type Brand = {
     logoUrl?: string;
     primaryColor?: string;
     secondaryColor?: string;
+    moneda?: string;
 };
 
 export default function BillSplitterFeature(props: { brand?: Brand; banners?: BannerRow[] }) {
@@ -65,9 +66,21 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
     const [error, setError] = useState<string | null>(null);
     const [isRateLimitError, setIsRateLimitError] = useState(false);
     const [storeName, setStoreName] = useState<string | null>(null);
-    const [currency, setCurrency] = useState<string>("S/");
+    const [currency, setCurrency] = useState<string>(brand?.moneda || "PEN");
     const [modalItem, setModalItem] = useState<Item | null>(null);
     const [buttonText, setButtonText] = useState<string>('Compartir Resultados');
+
+    const formatCurrency = (amount: number) => {
+        try {
+            const locale = currency === 'USD' ? 'en-US' : 'es-PE';
+            return new Intl.NumberFormat(locale, {
+                style: 'currency',
+                currency: currency,
+            }).format(amount);
+        } catch (e) {
+            return `${currency === 'USD' ? '$' : 'S/'} ${amount.toFixed(2)}`;
+        }
+    };
 
     const [processingPayment, setProcessingPayment] = useState<number | 'ALL' | null>(null);
     const [paidPersons, setPaidPersons] = useState<number[]>([]);
@@ -184,7 +197,7 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
         setError(null);
         setIsRateLimitError(false);
         setStoreName(null);
-        setCurrency("S/");
+        setCurrency(brand?.moneda || "PEN");
 
         try {
             // 1. COMPRIMIR IMAGEN (Soluciona error móvil)
@@ -210,8 +223,12 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
                 ? typeof rawData.storeName === 'string' ? rawData.storeName.trim() : null
                 : null;
             const extractedCurrency = rawData && typeof rawData === 'object' && !Array.isArray(rawData)
-                ? typeof rawData.currency === 'string' ? rawData.currency.trim() || "S/" : "S/"
-                : "S/";
+                ? typeof rawData.currency === 'string' ? rawData.currency.trim() : "PEN"
+                : "PEN";
+            
+            // Normalizar símbolos a códigos si es necesario (mejor si la API ya devuelve códigos)
+            const normalizedCurrency = extractedCurrency === "$" ? "USD" : extractedCurrency === "S/" ? "PEN" : extractedCurrency;
+
             const rawItems = Array.isArray(rawData) ? rawData : rawData?.items;
 
             if (!Array.isArray(rawItems) || rawItems.length === 0) {
@@ -219,7 +236,9 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
             }
 
             setStoreName(extractedStoreName);
-            setCurrency(extractedCurrency);
+            if (!brand?.moneda) {
+                setCurrency(normalizedCurrency || "PEN");
+            }
             setItems(rawItems.map((item, idx) => ({
                 id: idx, name: item.name, price: item.price, quantity: 1, assignments: []
             })));
@@ -246,13 +265,13 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
         const businessName = brand?.name?.trim() || 'SplitPay';
         const lines: string[] = [
             `🧾 Cuenta en ${businessName}`,
-            `💰 Total: ${currency}${totals.totalBill.toFixed(2)}`,
+            `💰 Total: ${formatCurrency(totals.totalBill)}`,
             '',
         ];
 
         people.forEach(person => {
             const amount = totals.map.get(person.id) || 0;
-            lines.push(`👤 ${person.name}: ${currency}${amount.toFixed(2)}`);
+            lines.push(`👤 ${person.name}: ${formatCurrency(amount)}`);
 
             const personItems = items
                 .map(item => {
@@ -431,12 +450,12 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
                         <div className="bg-gradient-to-br from-zinc-900 to-black border border-zinc-800 rounded-3xl p-8 text-center relative overflow-hidden shadow-2xl">
                             <div className="absolute inset-block-start-0 inset-inline-end-0 inline-size-32 block-size-32 bg-purple-500/10 rounded-full blur-2xl -me-10 -mt-10"></div>
                             <p className="text-zinc-500 text-[10px] uppercase tracking-[0.2em] font-bold mb-2">Total a Dividir</p>
-                            <h2 className="text-5xl font-black text-white tracking-tighter">{currency}{totals.totalBill.toFixed(2)}</h2>
+                            <h2 className="text-5xl font-black text-white tracking-tighter">{formatCurrency(totals.totalBill)}</h2>
 
                             {totals.unassigned > 0.01 ? (
                                 <div className="mt-4 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-zinc-900 border border-zinc-800">
                                     <div className="inline-size-1.5 block-size-1.5 rounded-full bg-orange-500 animate-pulse"></div>
-                                    <span className="text-xs text-zinc-400 font-medium">Falta asignar: <span className="text-white">{currency}{totals.unassigned.toFixed(2)}</span></span>
+                                    <span className="text-xs text-zinc-400 font-medium">Falta asignar: <span className="text-white">{formatCurrency(totals.unassigned)}</span></span>
                                 </div>
                             ) : (
                                 <div className="mt-4 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-950/30 border border-emerald-900/50">
@@ -509,10 +528,10 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
                                                 </div>
                                             </div>
                                             <div className="text-end">
-                                                <span className={`text-base font-bold ${isAssigned ? 'text-purple-400' : 'text-zinc-500'}`}>{currency}{item.price.toFixed(2)}</span>
+                                                <span className={`text-base font-bold ${isAssigned ? 'text-purple-400' : 'text-zinc-500'}`}>{formatCurrency(item.price)}</span>
                                                 {isAssigned && totalAssigned > 1 && (
                                                     <div className="text-[10px] text-zinc-500 mt-1 font-medium bg-zinc-950/50 px-1.5 py-0.5 rounded-md inline-block">
-                                                        {currency}{(item.price / totalAssigned).toFixed(2)} c/u
+                                                        {formatCurrency(item.price / totalAssigned)} c/u
                                                     </div>
                                                 )}
                                             </div>
@@ -535,7 +554,7 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
                             {totals.unassigned < 0.1 ? (
                                 <>Ver Resumen Final <Icons.ArrowRight /></>
                             ) : (
-                                `Faltan asignar ${currency}{totals.unassigned.toFixed(2)}`
+                                `Faltan asignar ${formatCurrency(totals.unassigned)}`
                             )}
                         </button>
                     </div>
@@ -547,7 +566,7 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
                         <div className="text-center">
                             <p className="text-zinc-500 text-[10px] uppercase tracking-[0.2em] font-bold mb-3">Total del Grupo</p>
                             <h2 className="text-6xl font-black text-white tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-zinc-400">
-                                ${currency}{totals.totalBill.toFixed(2)}
+                                {formatCurrency(totals.totalBill)}
                             </h2>
                             {mesaId && paidPersons.length === 0 && totals.totalBill > 0 && (
                                 <button
@@ -594,7 +613,7 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
                                                     <p className="text-xs text-zinc-500">Su parte</p>
                                                 </div>
                                             </div>
-                                            <span className="text-2xl font-bold text-white">{currency}{amount.toFixed(2)}</span>
+                                            <span className="text-2xl font-bold text-white">{formatCurrency(amount)}</span>
                                         </div>
                                         
                                         {/* Desglose de ítems */}

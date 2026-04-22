@@ -11,6 +11,7 @@ type Negocio = {
   nombre: string;
   logo_url: string;
   color_principal: string | null;
+  moneda: string;
 };
 
 export default function WaitlistClient({ negocio, mesaId }: { negocio: Negocio; mesaId?: string }) {
@@ -463,6 +464,7 @@ export default function WaitlistClient({ negocio, mesaId }: { negocio: Negocio; 
                   <InDiningView
                     ticketId={ticketId}
                     negocioId={negocio.id}
+                    moneda={negocio.moneda}
                     primaryColor={primaryColor}
                     supabase={supabase}
                   />

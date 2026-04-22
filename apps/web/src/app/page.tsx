@@ -10,6 +10,7 @@ type Brand = {
   logoUrl?: string;
   primaryColor?: string;
   secondaryColor?: string;
+  moneda?: string;
 };
 
 export default async function Home(props: { searchParams: Promise<{ ref?: string }> }) {
@@ -56,6 +57,7 @@ export default async function Home(props: { searchParams: Promise<{ ref?: string
         logoUrl: negocio.logo_url,
         primaryColor: negocio.color_principal ?? '#8b5cf6',
         secondaryColor: negocio.color_principal ?? '#a1a1aa',
+        moneda: negocio.moneda ?? 'PEN',
       }
     : null;
 

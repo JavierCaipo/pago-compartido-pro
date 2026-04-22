@@ -7,6 +7,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 type InDiningViewProps = {
   ticketId: string;
   negocioId: string;
+  moneda: string;
   primaryColor: string;
   supabase: SupabaseClient;
 };
@@ -14,6 +15,7 @@ type InDiningViewProps = {
 export default function InDiningView({
   ticketId,
   negocioId,
+  moneda,
   primaryColor,
   supabase,
 }: InDiningViewProps) {
@@ -25,6 +27,18 @@ export default function InDiningView({
   const [items, setItems] = useState<any[]>([]);
   const [isPending, setIsPending] = useState(false);
   const [total, setTotal] = useState(0);
+
+  const formatCurrency = (amount: number) => {
+    try {
+      const locale = moneda === 'USD' ? 'en-US' : 'es-PE';
+      return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: moneda || 'PEN',
+      }).format(amount);
+    } catch (e) {
+      return `${moneda || 'S/'} ${amount.toFixed(2)}`;
+    }
+  };
 
   useEffect(() => {
     fetchComanda();
@@ -178,7 +192,7 @@ export default function InDiningView({
       <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 shadow-inner">
         <h3 className="text-lg font-semibold text-white mb-4 flex items-center justify-between">
           <span>Desglose de Cuenta</span>
-          <span style={{ color: primaryColor }}>${total.toFixed(2)}</span>
+          <span style={{ color: primaryColor }}>{formatCurrency(total)}</span>
         </h3>
 
         {items.length === 0 ? (
@@ -193,7 +207,7 @@ export default function InDiningView({
                     <span className="text-zinc-400 font-medium">{item.cantidad}x</span>
                     <span className="text-zinc-200">{item.nombre}</span>
                   </div>
-                  <span className="text-zinc-300">${rowTotal.toFixed(2)}</span>
+                  <span className="text-zinc-300">{formatCurrency(rowTotal)}</span>
                 </div>
               );
             })}

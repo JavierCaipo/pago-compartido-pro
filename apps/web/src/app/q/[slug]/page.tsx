@@ -26,7 +26,7 @@ export default async function WaitlistPage(props: {
 
   const { data: negocio, error } = await supabase
     .from('negocios')
-    .select('id, nombre, logo_url, color_principal')
+    .select('id, nombre, logo_url, color_principal, moneda')
     .eq('slug', slug)
     .single();
 

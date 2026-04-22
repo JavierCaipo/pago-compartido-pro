@@ -8,10 +8,24 @@ interface Props {
   onClose: () => void;
   onSave: (itemId: number, assignments: { personId: number, quantity: number }[]) => void;
   currency?: string;
+  moneda?: string;
 }
 
-export default function ItemAssignmentModal({ item, people, onClose, onSave, currency = "S/" }: Props) {
+export default function ItemAssignmentModal({ item, people, onClose, onSave, currency = "PEN", moneda }: Props) {
+  const activeMoneda = moneda || currency;
   const [assignments, setAssignments] = useState<{ personId: number, quantity: number }[]>([]);
+
+  const formatCurrency = (amount: number) => {
+    try {
+      const locale = activeMoneda === 'USD' ? 'en-US' : 'es-PE';
+      return new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency: activeMoneda,
+      }).format(amount);
+    } catch (e) {
+      return `${activeMoneda === 'USD' ? '$' : 'S/'} ${amount.toFixed(2)}`;
+    }
+  };
 
   // Al abrir, cargar las asignaciones actuales
   useEffect(() => {
@@ -65,10 +79,10 @@ export default function ItemAssignmentModal({ item, people, onClose, onSave, cur
               )}
             </div>
             <div className="text-right shrink-0">
-              <div className="text-3xl font-bold text-[#9d25f4] tracking-tight">{currency}{item.price.toFixed(2)}</div>
+              <div className="text-3xl font-bold text-[#9d25f4] tracking-tight">{formatCurrency(item.price)}</div>
               {totalAssigned > 0 && (
                 <div className="text-[11px] text-gray-400 font-mono mt-1 font-medium bg-white/5 px-2 py-0.5 rounded-md inline-block">
-                  {currency}{unitPrice.toFixed(2)} c/u
+                  {formatCurrency(unitPrice)} c/u
                 </div>
               )}
             </div>
@@ -95,7 +109,7 @@ export default function ItemAssignmentModal({ item, people, onClose, onSave, cur
                     <div>
                       <span className={`text-lg font-medium ${quantity > 0 ? 'text-white' : 'text-gray-300'}`}>{p.name}</span>
                       {quantity > 0 && (
-                        <div className="text-sm text-gray-300">{currency}{cost.toFixed(2)}</div>
+                        <div className="text-sm text-gray-300">{formatCurrency(cost)}</div>
                       )}
                     </div>
                   </div>
