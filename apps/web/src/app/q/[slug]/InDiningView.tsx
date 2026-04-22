@@ -93,7 +93,8 @@ export default function InDiningView({
         .from("comandas")
         .select("*, comanda_items(*, productos(nombre))")
         .eq("mesa_id", fetchedMesaId)
-        .in("estado", ["preparando", "listo", "servido"])
+        .neq("estado", "pagado")
+        .neq("estado", "cancelado")
         .order("created_at", { ascending: false });
         
       if (comandas && comandas.length > 0) {
@@ -172,10 +173,11 @@ export default function InDiningView({
 
   let statusMessage = "";
   if (comanda) {
-    if (comanda.estado === "preparando") statusMessage = "Tus platos se están preparando con cariño.";
+    if (comanda.estado === "preparando" || comanda.estado === "cocinando") statusMessage = "Tus platos se están preparando con cariño.";
     else if (comanda.estado === "listo") statusMessage = "¡Tus platos van en camino a la mesa!";
-    else if (comanda.estado === "servido") statusMessage = "¡Buen provecho! 🍽️";
+    else if (comanda.estado === "servido" || comanda.estado === "entregado") statusMessage = "¡Buen provecho! 🍽️";
     else if (comanda.estado === "pendiente") statusMessage = "Esperando confirmación de la cocina...";
+    else if (comanda.estado === "abierta") statusMessage = "Tu orden ha sido recibida.";
   }
 
   return (
