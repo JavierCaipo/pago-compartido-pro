@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Receipt, CreditCard, Loader2 } from "lucide-react";
 import { SupabaseClient } from "@supabase/supabase-js";
 
@@ -23,7 +23,8 @@ export default function InDiningView({
   const [loading, setLoading] = useState(true);
   const [pedirCuentaLoad, setPedirCuentaLoad] = useState(false);
   const [mesaId, setMesaId] = useState<string | null>(null);
-  
+  const mesaIdRef = useRef<string | null>(null); // ref para closures estables
+
   const [items, setItems] = useState<any[]>([]);
   const [isPending, setIsPending] = useState(false);
   const [total, setTotal] = useState(0);
@@ -40,15 +41,110 @@ export default function InDiningView({
     }
   };
 
+  // ─── fetchComanda: estable con useCallback ────────────────────────────────
+  const fetchComanda = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+
+    // 1. Intentar obtener mesaId: primero del ref (ya conocido), luego de lista_espera
+    let activeMesaId = mesaIdRef.current;
+
+    if (!activeMesaId) {
+      const { data: lista } = await supabase
+        .from("lista_espera")
+        .select("mesa_id, pre_comanda")
+        .eq("id", ticketId)
+        .maybeSingle();
+
+      activeMesaId = lista?.mesa_id || null;
+
+      if (activeMesaId) {
+        mesaIdRef.current = activeMesaId;
+        setMesaId(activeMesaId);
+      }
+
+      // Fallback a pre_comanda SOLO si no hay mesaId en absoluto
+      if (!activeMesaId && lista?.pre_comanda?.items) {
+        const fallbackItems = lista.pre_comanda.items.map((item: any) => ({
+          ...item,
+          nombre: item.nombre || 'Producto',
+        }));
+        setItems(fallbackItems);
+        setIsPending(true);
+        const calcTotal = fallbackItems.reduce((acc: number, item: any) => {
+          const price = Number(item.precio || item.precio_unitario || 0);
+          const amount = Number(item.cantidad || 1);
+          if (item.subtotal) return acc + Number(item.subtotal);
+          return acc + price * amount;
+        }, 0);
+        setTotal(calcTotal);
+        setLoading(false);
+        return;
+      }
+    }
+
+    if (!activeMesaId) {
+      setLoading(false);
+      return;
+    }
+
+    // 2. Fetch de TODAS las comandas activas de la mesa
+    // Activa = cualquier estado que NO sea 'pagado' ni 'cancelado'
+    const { data: comandas } = await supabase
+      .from("comandas")
+      .select("*, comanda_items(*, productos(nombre))")
+      .eq("mesa_id", activeMesaId)
+      .in("estado", [
+        "abierta",
+        "pendiente",
+        "preparando",
+        "cocinando",
+        "listo",
+        "servido",
+        "entregado",
+        "por_cobrar",
+        "pidiendo_cuenta",
+      ])
+      .order("created_at", { ascending: false });
+
+    let loadedItems: any[] = [];
+
+    if (comandas && comandas.length > 0) {
+      comandas.forEach((c) => {
+        if (c.comanda_items) {
+          const normalized = c.comanda_items.map((item: any) => ({
+            ...item,
+            nombre: item.productos?.nombre || item.nombre || 'Producto',
+          }));
+          loadedItems = [...loadedItems, ...normalized];
+        }
+      });
+      setComanda(comandas[0]);
+    }
+
+    setItems(loadedItems);
+    setIsPending(false);
+
+    const calcTotal = loadedItems.reduce((acc: number, item: any) => {
+      const price = Number(item.precio || item.precio_unitario || 0);
+      const amount = Number(item.cantidad || 1);
+      if (item.subtotal) return acc + Number(item.subtotal);
+      return acc + price * amount;
+    }, 0);
+    setTotal(calcTotal);
+    setLoading(false);
+  }, [ticketId, supabase]); // mesaIdRef no necesita ser dependencia (es un ref mutable)
+
+  // ─── Carga inicial ────────────────────────────────────────────────────────
   useEffect(() => {
     fetchComanda();
-  }, [ticketId]);
+  }, [fetchComanda]);
 
+  // ─── Realtime: canal unificado, se re-registra cuando mesaId está disponible
   useEffect(() => {
     if (!mesaId) return;
 
     const channel = supabase
-      .channel(`mesa_status_${mesaId}`)
+      .channel(`indining_${mesaId}`)
       .on(
         "postgres_changes",
         {
@@ -74,9 +170,7 @@ export default function InDiningView({
           table: "comandas",
           filter: `mesa_id=eq.${mesaId}`,
         },
-        () => {
-          fetchComanda(true); // silent fetch
-        }
+        () => fetchComanda(true)
       )
       .on(
         "postgres_changes",
@@ -85,89 +179,23 @@ export default function InDiningView({
           schema: "public",
           table: "comanda_items",
         },
-        () => {
-          fetchComanda(true); // silent fetch
-        }
+        () => fetchComanda(true)
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [mesaId, negocioId, supabase]);
-
-  const fetchComanda = async (silent = false) => {
-    if (!silent) setLoading(true);
-    // 1. Buscar la información base en lista_espera (Fallback a pre_comanda)
-    const { data: lista } = await supabase
-      .from("lista_espera")
-      .select("mesa_id, pre_comanda")
-      .eq("id", ticketId)
-      .maybeSingle();
-
-    let loadedItems: any[] = [];
-    let pendingStatus = false;
-    let fetchedMesaId = lista?.mesa_id || null;
-
-    if (fetchedMesaId) {
-      setMesaId(fetchedMesaId);
-      
-      // 2. Fetch limpio de comandas
-      const { data: comandas } = await supabase
-        .from("comandas")
-        .select("*, comanda_items(*, productos(nombre))")
-        .eq("mesa_id", fetchedMesaId)
-        .neq("estado", "pagado")
-        .neq("estado", "cancelado")
-        .order("created_at", { ascending: false });
-        
-      if (comandas && comandas.length > 0) {
-        comandas.forEach(c => {
-           if (c.comanda_items) {
-             const normalized = c.comanda_items.map((item: any) => ({
-               ...item,
-               nombre: item.productos?.nombre || item.nombre || 'Producto'
-             }));
-             loadedItems = [...loadedItems, ...normalized];
-           }
-        });
-        setComanda(comandas[0]); 
-      }
-    }
-
-    // Fallback Agresivo: Si no hay items de comandas, usar pre_comanda
-    if (loadedItems.length === 0 && lista?.pre_comanda?.items) {
-      loadedItems = lista.pre_comanda.items.map((item: any) => ({
-        ...item,
-        nombre: item.nombre || 'Producto'
-      }));
-      pendingStatus = true;
-    }
-
-    setItems(loadedItems);
-    setIsPending(pendingStatus);
-    
-    // Calcular total de manera segura
-    const calcTotal = loadedItems.reduce((acc: number, item: any) => {
-      const price = Number(item.precio || item.precio_unitario || 0);
-      const amount = Number(item.cantidad || 1);
-      if (item.subtotal) return acc + Number(item.subtotal);
-      return acc + (price * amount);
-    }, 0);
-    setTotal(calcTotal);
-    
-    setLoading(false);
-  };
+  }, [mesaId, negocioId, supabase, fetchComanda]);
 
   const handlePedirCuenta = async () => {
-    if (!mesaId) {
+    if (!mesaIdRef.current) {
       alert("No podemos identificar tu mesa en este momento.");
       return;
     }
     setPedirCuentaLoad(true);
     try {
-      // Usar RPC para evitar errores de RLS y parpadeos
-      await supabase.rpc('marcar_requiere_cuenta', { p_mesa_id: mesaId });
+      await supabase.rpc('marcar_requiere_cuenta', { p_mesa_id: mesaIdRef.current });
       alert("El mozo ha sido notificado para llevar la cuenta.");
     } catch (err) {
       console.error("Error al pedir cuenta:", err);
@@ -177,13 +205,12 @@ export default function InDiningView({
   };
 
   const handleDividirCuenta = () => {
-    if (!mesaId) {
+    if (!mesaIdRef.current) {
       alert("No podemos identificar tu mesa.");
       return;
     }
     const slug = window.location.pathname.split("/").pop();
-    // Pasar ref=slug y ticketId para que BillSplitterFeature pueda hacer fallback a pre_comanda si es necesario
-    window.location.href = `/?ref=${slug}&mesaId=${mesaId}&ticketId=${ticketId}&checkout=true`;
+    window.location.href = `/?ref=${slug}&mesaId=${mesaIdRef.current}&ticketId=${ticketId}&checkout=true`;
   };
 
   if (loading) {
@@ -202,6 +229,7 @@ export default function InDiningView({
     else if (comanda.estado === "servido" || comanda.estado === "entregado") statusMessage = "¡Buen provecho! 🍽️";
     else if (comanda.estado === "pendiente") statusMessage = "Esperando confirmación de la cocina...";
     else if (comanda.estado === "abierta") statusMessage = "Tu orden ha sido recibida.";
+    else if (comanda.estado === "por_cobrar" || comanda.estado === "pidiendo_cuenta") statusMessage = "El mozo está en camino con la cuenta.";
   }
 
   return (
@@ -226,9 +254,9 @@ export default function InDiningView({
         ) : (
           <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
             {items.map((item: any, i: number) => {
-              const rowTotal = item.subtotal ? Number(item.subtotal) : (item.precio || 0) * (item.cantidad || 1);
+              const rowTotal = item.subtotal ? Number(item.subtotal) : (item.precio_unitario || item.precio || 0) * (item.cantidad || 1);
               return (
-                <div key={i} className="flex justify-between items-center text-sm">
+                <div key={item.id || i} className="flex justify-between items-center text-sm">
                   <div className="flex items-center gap-2">
                     <span className="text-zinc-400 font-medium">{item.cantidad}x</span>
                     <span className="text-zinc-200">{item.nombre}</span>

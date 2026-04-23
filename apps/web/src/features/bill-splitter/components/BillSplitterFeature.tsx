@@ -120,8 +120,17 @@ function BillSplitterFeatureInner({ brand, banners }: { brand?: Brand; banners?:
                     .from("comandas")
                     .select("*, comanda_items(*, productos(nombre))")
                     .eq("mesa_id", mesaId)
-                    .neq("estado", "pagado")
-                    .neq("estado", "cancelado");
+                    .in("estado", [
+                        "abierta",
+                        "pendiente",
+                        "preparando",
+                        "cocinando",
+                        "listo",
+                        "servido",
+                        "entregado",
+                        "por_cobrar",
+                        "pidiendo_cuenta",
+                    ]);
                 
                 if (comandaError) throw comandaError;
                 
