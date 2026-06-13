@@ -4,7 +4,11 @@ import { useRef, useMemo, useState, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
-export default function ParticleBackground() {
+interface ParticleBackgroundProps {
+  mode?: "field" | "converge";
+}
+
+export default function ParticleBackground({ mode = "field" }: ParticleBackgroundProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const count = 3000;
 
