@@ -4,7 +4,11 @@ import { useRef, useMemo, useState, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
-export default function ParticleBackground() {
+interface ParticleBackgroundProps {
+  mode?: "field" | "converge";
+}
+
+export default function ParticleBackground({ mode = "field" }: ParticleBackgroundProps) {
   const pointsRef = useRef<THREE.Points>(null);
   const count = 3000;
 
@@ -61,17 +65,21 @@ export default function ParticleBackground() {
   return (
     <points ref={pointsRef}>
       <bufferGeometry>
+        {/* @ts-ignore — args requerido por THREE.BufferAttribute en R3F */}
         <bufferAttribute
           attach="attributes-position"
           count={count}
           array={positions}
           itemSize={3}
+          args={[positions, 3]}
         />
+        {/* @ts-ignore — args requerido por THREE.BufferAttribute en R3F */}
         <bufferAttribute
           attach="attributes-color"
           count={count}
           array={colors}
           itemSize={3}
+          args={[colors, 3]}
         />
       </bufferGeometry>
       <pointsMaterial
