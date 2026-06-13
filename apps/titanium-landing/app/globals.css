@@ -1,0 +1,180 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────
+   TITANIUM OS — Design Tokens (2040 Aesthetic)
+   Edit these CSS variables to adjust the global palette.
+───────────────────────────────────────────── */
+:root {
+  /* Core Backgrounds */
+  --ti-bg:           #050505;
+  --ti-surface:      #0d0d0d;
+  --ti-surface-2:    #111111;
+
+  /* Accent Palette */
+  --ti-violet:       #7B4FFF;
+  --ti-violet-glow:  rgba(123, 79, 255, 0.25);
+  --ti-cyan:         #00F5FF;
+  --ti-cyan-glow:    rgba(0, 245, 255, 0.20);
+  --ti-gold:         #C9A84C;
+  --ti-gold-glow:    rgba(201, 168, 76, 0.20);
+
+  /* Glassmorphism */
+  --ti-glass-bg:     rgba(255, 255, 255, 0.03);
+  --ti-glass-border: rgba(255, 255, 255, 0.07);
+  --ti-glass-hover:  rgba(255, 255, 255, 0.06);
+
+  /* Typography */
+  --ti-text-primary:   #F2F2F2;
+  --ti-text-secondary: rgba(242, 242, 242, 0.55);
+  --ti-text-muted:     rgba(242, 242, 242, 0.30);
+
+  /* Motion Timings */
+  --ti-duration-fast:   180ms;
+  --ti-duration-med:    380ms;
+  --ti-duration-slow:   700ms;
+  --ti-ease-out:        cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ─────────────────────────────────────────────
+   Base Reset
+───────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background-color: var(--ti-bg);
+  color: var(--ti-text-primary);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  cursor: none; /* replaced by MagneticCursor */
+}
+
+/* ─────────────────────────────────────────────
+   Custom Scrollbar
+───────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--ti-bg); }
+::-webkit-scrollbar-thumb {
+  background: var(--ti-violet);
+  border-radius: 2px;
+}
+
+/* ─────────────────────────────────────────────
+   Titanium Component Classes
+   (Plain CSS — no Tailwind layer needed for inline-style-heavy components)
+───────────────────────────────────────────── */
+
+/* Holographic CTA Button */
+.ti-btn-holo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  border-radius: 100px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: white;
+  text-decoration: none;
+  background: linear-gradient(135deg, var(--ti-violet) 0%, #4F46E5 50%, var(--ti-cyan) 100%);
+  background-size: 200% 200%;
+  border: none;
+  cursor: none;
+  overflow: hidden;
+  transition:
+    background-position var(--ti-duration-med) var(--ti-ease-out),
+    box-shadow var(--ti-duration-med) var(--ti-ease-out);
+}
+.ti-btn-holo:hover {
+  background-position: 100% 0%;
+  box-shadow:
+    0 0 20px var(--ti-violet-glow),
+    0 0 60px var(--ti-cyan-glow),
+    inset 0 1px 0 rgba(255,255,255,0.15);
+}
+.ti-btn-holo::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.12) 50%, transparent 60%);
+  transform: translateX(-100%);
+  transition: transform 0.6s ease;
+}
+.ti-btn-holo:hover::before { transform: translateX(100%); }
+
+/* Outline Secondary Button */
+.ti-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 28px;
+  border-radius: 100px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ti-text-primary);
+  background: transparent;
+  border: 1px solid var(--ti-glass-border);
+  cursor: none;
+  text-decoration: none;
+  transition:
+    border-color var(--ti-duration-fast),
+    background var(--ti-duration-fast);
+}
+.ti-btn-outline:hover {
+  border-color: rgba(255,255,255,0.2);
+  background: var(--ti-glass-bg);
+}
+
+/* Eyebrow Label */
+.ti-eyebrow {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--ti-text-muted);
+}
+
+/* ─────────────────────────────────────────────
+   Gradient Text Utilities
+───────────────────────────────────────────── */
+.ti-gradient-text {
+  background: linear-gradient(135deg, #fff 0%, rgba(255,255,255,0.7) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.ti-gradient-violet {
+  background: linear-gradient(135deg, var(--ti-violet) 0%, var(--ti-cyan) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─────────────────────────────────────────────
+   Noise Overlay — subtle cinematic film grain
+───────────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.35;
+}
