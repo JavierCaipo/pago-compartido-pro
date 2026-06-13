@@ -1,3 +1,5 @@
+**REGLA DE AISLAMIENTO DE ESPACIO DE TRABAJO: Bajo ninguna circunstancia el agente debe salir de la carpeta pago-compartido-pro para leer o modificar código. Cualquier intento de referenciar o auditar proyectos externos (como CIVI, SaciSoft o EnRuta) está estrictamente prohibido al trabajar en este repositorio.**
+
 # PROYECTO: SAAS FACTORY (Gemini Context)
 
 ## 🎯 Principios de Ingeniería
