@@ -102,6 +102,8 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
     }
   }, [isOpen, setMessages]);
 
+  console.log("Rastreador de Candados:", { isLoading, isFetchingHistory, inputLength: input?.length });
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -239,8 +241,8 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
                   />
                   <button
                     type="submit"
-                    disabled={isLoading || isFetchingHistory || !input?.trim()}
-                    className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed enabled:bg-gradient-to-r enabled:from-[#7B4FFF] enabled:to-[#00C2FF] enabled:shadow-[0_0_14px_rgba(123,79,255,0.4)] enabled:hover:shadow-[0_0_20px_rgba(0,194,255,0.35)]"
+                    disabled={!input || input.trim() === ''}
+                    className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer enabled:bg-gradient-to-r enabled:from-[#7B4FFF] enabled:to-[#00C2FF] enabled:shadow-[0_0_14px_rgba(123,79,255,0.4)] enabled:hover:shadow-[0_0_20px_rgba(0,194,255,0.35)]"
                   >
                     <Send size={15} className="ml-0.5" />
                   </button>
