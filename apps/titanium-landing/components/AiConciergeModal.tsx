@@ -25,7 +25,7 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
   const [transferTarget, setTransferTarget] = useState("");
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
 
-  const { messages, setMessages, input, setInput, handleSubmit, isLoading = false } = useChat({
+  const { messages, setMessages, input, handleInputChange, handleSubmit, isLoading = false } = useChat({
     api: '/api/chat',
     body: {
       context,
@@ -236,7 +236,7 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
                 >
                   <input
                     value={input || ''}
-                    onChange={(e) => setInput(e.target.value)}
+                    onChange={handleInputChange}
                     placeholder="Escribe tu mensaje..."
                     className="flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none"
                   />
