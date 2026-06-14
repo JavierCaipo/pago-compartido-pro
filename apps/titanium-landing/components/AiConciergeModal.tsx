@@ -25,7 +25,11 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
   const [transferTarget, setTransferTarget] = useState("");
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
 
-  const { messages, input, handleInputChange, handleSubmit, setMessages, isLoading } = useChat({
+  // 1. NUEVO: Nuestro propio estado para controlar el texto sin depender del SDK
+  const [localInput, setLocalInput] = useState('');
+
+  // 2. Extraemos 'append' en lugar de handleSubmit/input
+  const { messages, append, setMessages, isLoading = false } = useChat({
     api: '/api/chat',
     body: {
       context,
@@ -37,7 +41,7 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
         const { targetAdvisor } = toolCall.args;
         setIsTransferring(true);
         setTransferTarget(targetAdvisor);
-        
+
         // Artificial delay for UX
         setTimeout(() => {
           if (onTransferAdvisor) onTransferAdvisor(targetAdvisor);
@@ -75,7 +79,7 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
         setIsFetchingHistory(false);
       }
     };
-    
+
     fetchHistory();
   }, [isOpen, setMessages]);
 
@@ -102,7 +106,7 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
     }
   }, [isOpen, setMessages]);
 
-  console.log("Rastreador de Candados:", { isLoading, isFetchingHistory, inputLength: input?.length });
+  console.log("Rastreador de Candados:", { isLoading, isFetchingHistory, inputLength: localInput?.length });
 
   return (
     <AnimatePresence>
@@ -128,7 +132,7 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
           >
             {/* 2. CAJA INTERNA: Maneja el padding absoluto para forzar los márgenes internos */}
             <div className="absolute inset-0 p-8 flex flex-col">
-              
+
               {/* HEADER (Sin paddings propios) */}
               <div className="flex-shrink-0 flex items-center justify-between pb-6 border-b border-white/5">
                 <div className="flex items-center gap-4">
@@ -141,11 +145,10 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
                           <div
                             key={adv.name}
                             style={{ zIndex: ADVISORS.length - index }}
-                            className={`relative rounded-full border-2 border-[#121212] transition-all duration-300 ${
-                              isActive
+                            className={`relative rounded-full border-2 border-[#121212] transition-all duration-300 ${isActive
                                 ? 'w-12 h-12 shadow-[0_0_20px_rgba(123,79,255,0.5)] ring-2 ring-[#00C2FF]'
                                 : 'w-10 h-10 opacity-50 grayscale'
-                            }`}
+                              }`}
                           >
                             <Image src={adv.photoUrl} alt={adv.name} fill className="rounded-full object-cover" sizes={isActive ? "48px" : "40px"} />
                             {isActive && (
@@ -193,11 +196,10 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
                     )}
 
                     <div
-                      className={`max-w-[78%] text-sm leading-relaxed ${
-                        m.role === 'user'
+                      className={`max-w-[78%] text-sm leading-relaxed ${m.role === 'user'
                           ? 'bg-gradient-to-tr from-[#7B4FFF]/80 to-[#00C2FF]/80 text-white rounded-2xl rounded-tr-sm px-4 py-3 shadow-[0_4px_15px_rgba(123,79,255,0.2)]'
                           : 'bg-white/5 border border-white/10 text-gray-200 rounded-2xl rounded-tl-sm backdrop-blur-md px-4 py-3'
-                      }`}
+                        }`}
                     >
                       {m.role === 'user' ? (
                         <p>{m.content}</p>
@@ -230,19 +232,34 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* FOOTER (Sin paddings propios, padding-top para separar del scroll) */}
+              {/* FOOTER: Botón y Formulario blindados */}
               <div className="flex-shrink-0 pt-6">
-                <form onSubmit={handleSubmit} className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-2 pl-5 py-2 focus-within:border-[#7B4FFF]/50 focus-within:shadow-[0_0_0_1px_rgba(123,79,255,0.25)] transition-all duration-300">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!localInput.trim()) return;
+
+                    // Dispara a la IA manualmente
+                    append({ role: 'user', content: localInput });
+
+                    // Limpia el input local
+                    setLocalInput('');
+                  }}
+                  className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-2 pl-5 py-2 focus-within:border-[#7B4FFF]/50 focus-within:shadow-[0_0_0_1px_rgba(123,79,255,0.25)] transition-all duration-300"
+                >
                   <input
-                    value={input}
-                    onChange={handleInputChange}
+                    value={localInput}
+                    onChange={(e) => setLocalInput(e.target.value)}
                     placeholder="Escribe tu mensaje..."
                     className="flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none"
                   />
                   <button
                     type="submit"
-                    disabled={!input || input.trim() === ''}
-                    className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer enabled:bg-gradient-to-r enabled:from-[#7B4FFF] enabled:to-[#00C2FF] enabled:shadow-[0_0_14px_rgba(123,79,255,0.4)] enabled:hover:shadow-[0_0_20px_rgba(0,194,255,0.35)]"
+                    disabled={isLoading || isFetchingHistory || !localInput.trim()}
+                    className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white transition-all duration-300 ${isLoading || isFetchingHistory || !localInput.trim()
+                        ? 'opacity-50 cursor-not-allowed bg-white/10'
+                        : 'cursor-pointer bg-gradient-to-r from-[#7B4FFF] to-[#00C2FF] shadow-[0_0_14px_rgba(123,79,255,0.4)] hover:shadow-[0_0_20px_rgba(0,194,255,0.35)]'
+                      }`}
                   >
                     <Send size={15} className="ml-0.5" />
                   </button>
