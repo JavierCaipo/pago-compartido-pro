@@ -9,14 +9,13 @@ interface PillarCardProps {
   url: string;
   index: number;
   accentColor: string;
+  onOpenConcierge?: (context: string) => void;
 }
 
-export default function PillarCard({ eyebrow, title, description, url, index, accentColor }: PillarCardProps) {
+export default function PillarCard({ eyebrow, title, description, url, index, accentColor, onOpenConcierge }: PillarCardProps) {
   return (
-    <motion.a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
+    <motion.button
+      onClick={() => onOpenConcierge?.(title)}
       initial={{ opacity: 0, y: 48 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-60px" }}
@@ -31,12 +30,16 @@ export default function PillarCard({ eyebrow, title, description, url, index, ac
         background: `linear-gradient(160deg, ${accentColor}30 0%, transparent 60%)`,
         transition: "box-shadow 0.4s ease",
         boxShadow: "0 0 0 transparent",
+        border: "none",
+        width: "100%",
+        textAlign: "left",
+        cursor: "pointer",
       }}
       onMouseEnter={e => {
-        (e.currentTarget as HTMLAnchorElement).style.boxShadow = `0 0 60px ${accentColor}18, 0 32px 64px rgba(0,0,0,0.4)`;
+        (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 0 60px ${accentColor}18, 0 32px 64px rgba(0,0,0,0.4)`;
       }}
       onMouseLeave={e => {
-        (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 0 0 transparent";
+        (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 0 0 transparent";
       }}
     >
       {/* Inner card */}
@@ -134,6 +137,6 @@ export default function PillarCard({ eyebrow, title, description, url, index, ac
           </svg>
         </div>
       </div>
-    </motion.a>
+    </motion.button>
   );
 }

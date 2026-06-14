@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import Link from "next/link";
+import Image from "next/image";
 
-export default function NavBar() {
+interface NavBarProps {
+  onOpenConcierge?: () => void;
+}
+
+export default function NavBar({ onOpenConcierge }: NavBarProps) {
   const navRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -46,19 +51,26 @@ export default function NavBar() {
       <Link href="/" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none" }}>
         <div
           style={{
-            width: 34,
-            height: 34,
-            borderRadius: 8,
-            background: "linear-gradient(135deg, var(--ti-violet) 0%, var(--ti-cyan) 100%)",
+            width: 48,
+            height: 48,
+            borderRadius: 10,
+            overflow: "hidden",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            boxShadow: "0 0 16px var(--ti-violet-glow)",
+            boxShadow: "0 0 20px var(--ti-violet-glow)",
+            position: "relative",
+            flexShrink: 0,
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
+          <Image
+            src="/logo.png"
+            alt="Titanium Logo"
+            fill
+            sizes="48px"
+            loading="eager"
+            style={{ objectFit: "cover" }}
+          />
         </div>
         <span
           style={{
@@ -74,33 +86,36 @@ export default function NavBar() {
 
       {/* Nav Right */}
       <nav style={{ display: "flex", alignItems: "center", gap: 32 }}>
-        <Link
-          href="https://titanium.tresapps.app/login"
-          target="_blank"
-          rel="noopener noreferrer"
+        <button
+          onClick={onOpenConcierge}
           style={{
             fontSize: "0.75rem",
             fontWeight: 500,
             letterSpacing: "0.12em",
             textTransform: "uppercase",
             color: "var(--ti-text-secondary)",
-            textDecoration: "none",
+            background: "none",
+            border: "none",
+            cursor: "pointer",
             transition: "color 0.2s ease",
           }}
           onMouseEnter={e => (e.currentTarget.style.color = "var(--ti-text-primary)")}
           onMouseLeave={e => (e.currentTarget.style.color = "var(--ti-text-secondary)")}
         >
           Soporte
-        </Link>
-        <Link
-          href="https://titanium.tresapps.app/login"
-          target="_blank"
-          rel="noopener noreferrer"
+        </button>
+        <button
+          onClick={onOpenConcierge}
           className="ti-btn-outline"
-          style={{ fontSize: "0.7rem", padding: "8px 20px" }}
+          style={{ 
+            fontSize: "0.7rem", 
+            padding: "8px 20px",
+            background: "none",
+            cursor: "pointer",
+          }}
         >
           Acceder →
-        </Link>
+        </button>
       </nav>
 
       <style>{`

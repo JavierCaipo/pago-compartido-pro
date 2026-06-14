@@ -27,7 +27,11 @@ const pillars = [
   },
 ];
 
-export default function EcosystemSection() {
+interface EcosystemSectionProps {
+  onOpenConcierge?: (context: string) => void;
+}
+
+export default function EcosystemSection({ onOpenConcierge }: EcosystemSectionProps) {
   return (
     <section id="ecosystem" style={{ padding: "160px 48px 180px", position: "relative", zIndex: 10 }}>
       <div style={{ maxWidth: 1200, margin: "0 auto" }}>
@@ -93,6 +97,7 @@ export default function EcosystemSection() {
               description={pillar.description}
               url={pillar.url}
               accentColor={pillar.accentColor}
+              onOpenConcierge={onOpenConcierge}
             />
           ))}
         </div>

@@ -3,7 +3,11 @@
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useRef } from "react";
 
-export default function HeroSection() {
+interface HeroSectionProps {
+  onOpenConcierge?: () => void;
+}
+
+export default function HeroSection({ onOpenConcierge }: HeroSectionProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -104,15 +108,18 @@ export default function HeroSection() {
           >
             Explorar el ecosistema
           </a>
-          <a
-            href="https://titanium.tresapps.app/login"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={onOpenConcierge}
             className="ti-btn-outline"
-            style={{ fontSize: "0.8rem", padding: "16px 36px" }}
+            style={{ 
+              fontSize: "0.8rem", 
+              padding: "16px 36px",
+              background: "none",
+              cursor: "pointer",
+            }}
           >
             Acceder a Titanium OS
-          </a>
+          </button>
         </motion.div>
       </motion.div>
 
