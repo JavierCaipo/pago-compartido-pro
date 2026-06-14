@@ -23,6 +23,7 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isTransferring, setIsTransferring] = useState(false);
   const [transferTarget, setTransferTarget] = useState("");
+  const [isFetchingHistory, setIsFetchingHistory] = useState(false);
 
   const { messages, input, handleInputChange, handleSubmit, setMessages, isLoading } = useChat({
     api: '/api/chat',
@@ -60,14 +61,22 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
     setSessionId(currentSessionId);
 
     // Fetch history
-    fetch(`/api/chat/history?sessionId=${currentSessionId}`)
-      .then(res => res.json())
-      .then(data => {
+    const fetchHistory = async () => {
+      setIsFetchingHistory(true);
+      try {
+        const res = await fetch(`/api/chat/history?sessionId=${currentSessionId}`);
+        const data = await res.json();
         if (data.messages && data.messages.length > 0) {
           setMessages(data.messages);
         }
-      })
-      .catch(console.error);
+      } catch (error) {
+        console.error('Error cargando historial de Supabase:', error);
+      } finally {
+        setIsFetchingHistory(false);
+      }
+    };
+    
+    fetchHistory();
   }, [isOpen, setMessages]);
 
   // Save history on messages change
@@ -230,7 +239,7 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
                   />
                   <button
                     type="submit"
-                    disabled={isLoading || !input?.trim()}
+                    disabled={isLoading || isFetchingHistory || !input?.trim()}
                     className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed enabled:bg-gradient-to-r enabled:from-[#7B4FFF] enabled:to-[#00C2FF] enabled:shadow-[0_0_14px_rgba(123,79,255,0.4)] enabled:hover:shadow-[0_0_20px_rgba(0,194,255,0.35)]"
                   >
                     <Send size={15} className="ml-0.5" />
