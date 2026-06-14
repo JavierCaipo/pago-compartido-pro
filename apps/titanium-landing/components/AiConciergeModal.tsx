@@ -25,11 +25,7 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
   const [transferTarget, setTransferTarget] = useState("");
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
 
-  // 1. NUEVO: Nuestro propio estado para controlar el texto sin depender del SDK
-  const [localInput, setLocalInput] = useState('');
-
-  // 2. Extraemos 'append' en lugar de handleSubmit/input
-  const { messages, append, setMessages, isLoading = false } = useChat({
+  const { messages, setMessages, input, setInput, handleSubmit, isLoading = false } = useChat({
     api: '/api/chat',
     body: {
       context,
@@ -106,7 +102,7 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
     }
   }, [isOpen, setMessages]);
 
-  console.log("Rastreador de Candados:", { isLoading, isFetchingHistory, inputLength: localInput?.length });
+  console.log("Rastreador de Candados:", { isLoading, isFetchingHistory, inputLength: input?.length });
 
   return (
     <AnimatePresence>
@@ -234,32 +230,24 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
 
               {/* FOOTER: Botón y Formulario blindados */}
               <div className="flex-shrink-0 pt-6">
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!localInput.trim()) return;
-
-                    // Dispara a la IA manualmente
-                    append({ role: 'user', content: localInput });
-
-                    // Limpia el input local
-                    setLocalInput('');
-                  }}
+                <form 
+                  onSubmit={handleSubmit} 
                   className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-2 pl-5 py-2 focus-within:border-[#7B4FFF]/50 focus-within:shadow-[0_0_0_1px_rgba(123,79,255,0.25)] transition-all duration-300"
                 >
                   <input
-                    value={localInput}
-                    onChange={(e) => setLocalInput(e.target.value)}
+                    value={input || ''}
+                    onChange={(e) => setInput(e.target.value)}
                     placeholder="Escribe tu mensaje..."
                     className="flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none"
                   />
                   <button
                     type="submit"
-                    disabled={isLoading || isFetchingHistory || !localInput.trim()}
-                    className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white transition-all duration-300 ${isLoading || isFetchingHistory || !localInput.trim()
+                    disabled={isLoading || isFetchingHistory || !input || input.trim() === ''}
+                    className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white transition-all duration-300 ${
+                      isLoading || isFetchingHistory || !input || input.trim() === ''
                         ? 'opacity-50 cursor-not-allowed bg-white/10'
                         : 'cursor-pointer bg-gradient-to-r from-[#7B4FFF] to-[#00C2FF] shadow-[0_0_14px_rgba(123,79,255,0.4)] hover:shadow-[0_0_20px_rgba(0,194,255,0.35)]'
-                      }`}
+                    }`}
                   >
                     <Send size={15} className="ml-0.5" />
                   </button>
