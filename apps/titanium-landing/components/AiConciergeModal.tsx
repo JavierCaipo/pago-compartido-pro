@@ -22,6 +22,7 @@ interface AiConciergeModalProps {
 export default function AiConciergeModal({ isOpen, onClose, context, advisorName = "Alex", advisorRole = "Especialista en Éxito", advisorPhotoUrl = "/images/advisors/alex.png", customSystemPrompt, onTransferAdvisor }: AiConciergeModalProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isTransferring, setIsTransferring] = useState(false);
+  const [textoLocal, setTextoLocal] = useState('');
   const [transferTarget, setTransferTarget] = useState("");
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
 
@@ -231,20 +232,26 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
               {/* FOOTER: Botón y Formulario blindados */}
               <div className="flex-shrink-0 pt-6">
                 <form 
-                  onSubmit={handleSubmit} 
+                  onSubmit={(e) => {
+                    handleSubmit(e);
+                    setTextoLocal('');
+                  }} 
                   className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-2 pl-5 py-2 focus-within:border-[#7B4FFF]/50 focus-within:shadow-[0_0_0_1px_rgba(123,79,255,0.25)] transition-all duration-300"
                 >
                   <input
-                    value={input || ''}
-                    onChange={handleInputChange}
+                    value={textoLocal}
+                    onChange={(e) => {
+                      setTextoLocal(e.target.value);
+                      handleInputChange(e);
+                    }}
                     placeholder="Escribe tu mensaje..."
                     className="flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none"
                   />
                   <button
                     type="submit"
-                    disabled={isLoading || isFetchingHistory || !input || input.trim() === ''}
+                    disabled={isLoading || isFetchingHistory || !textoLocal.trim()}
                     className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-white transition-all duration-300 ${
-                      isLoading || isFetchingHistory || !input || input.trim() === ''
+                      isLoading || isFetchingHistory || !textoLocal.trim()
                         ? 'opacity-50 cursor-not-allowed bg-white/10'
                         : 'cursor-pointer bg-gradient-to-r from-[#7B4FFF] to-[#00C2FF] shadow-[0_0_14px_rgba(123,79,255,0.4)] hover:shadow-[0_0_20px_rgba(0,194,255,0.35)]'
                     }`}
