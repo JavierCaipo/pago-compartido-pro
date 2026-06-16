@@ -233,16 +233,17 @@ export default function AiConciergeModal({ isOpen, onClose, context, advisorName
               <div className="flex-shrink-0 pt-6">
                 <form 
                   onSubmit={(e) => {
-                    handleSubmit(e); // El SDK envía el mensaje a la IA
-                    setTextoLocal(''); // Limpiamos la caja visualmente tras enviar
+                    e.preventDefault(); // 🛑 ESTE ES EL ESCUDO: Evita que la página se recargue y cierre el modal
+                    handleSubmit(e);    // 🧠 El SDK envía el mensaje a la IA
+                    setTextoLocal('');  // 🧹 Limpiamos la caja visualmente
                   }} 
                   className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-2 pl-5 py-2 focus-within:border-[#7B4FFF]/50 focus-within:shadow-[0_0_0_1px_rgba(123,79,255,0.25)] transition-all duration-300"
                 >
                   <input
                     value={textoLocal}
                     onChange={(e) => {
-                      setTextoLocal(e.target.value); // 1. Permite que tus letras aparezcan en pantalla al instante
-                      handleInputChange(e);          // 2. Le inyecta el texto al SDK de Vercel en silencio
+                      setTextoLocal(e.target.value); 
+                      handleInputChange(e);          
                     }}
                     placeholder="Escribe tu mensaje..."
                     className="flex-1 bg-transparent text-sm text-white placeholder:text-gray-500 focus:outline-none"
